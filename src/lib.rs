@@ -16,8 +16,8 @@ extern crate serde_derive;
 extern crate toml;
 extern crate uname;
 
-mod device;
 mod cross;
+mod device;
 mod facade;
 mod sdk;
 mod utils;
@@ -26,11 +26,10 @@ use clap::{App, AppSettings, Arg, SubCommand};
 use cross::{pkg_config_path, run_configure, run_pkg_config};
 use device::{enable_networking, netaddr, netls, scp_to_device, ssh, start_emulator, stop_emulator};
 use facade::create_facade;
-use failure::{Error, ResultExt, err_msg};
-use sdk::{FuchsiaConfig, cargo_out_dir, clang_archiver_path, clang_c_compiler_path,
-          clang_cpp_compiler_path, clang_linker_path, clang_ranlib_path, shared_libraries_path,
-          sysroot_path,
-          target_gen_dir};
+use failure::{err_msg, Error, ResultExt};
+use sdk::{cargo_out_dir, clang_archiver_path, clang_c_compiler_path, clang_cpp_compiler_path,
+          clang_linker_path, clang_ranlib_path, shared_libraries_path, sysroot_path,
+          target_gen_dir, FuchsiaConfig};
 pub use sdk::TargetOptions;
 use std::fs;
 use std::path::PathBuf;
@@ -38,27 +37,34 @@ use std::process::Command;
 use utils::strip_binary;
 
 fn copy_to_target(
-    source_path: &PathBuf,
-    verbose: bool,
-    target_options: &TargetOptions,
+    source_path: &PathBuf, verbose: bool, target_options: &TargetOptions
 ) -> Result<String, Error> {
     let netaddr = netaddr(verbose, target_options)?;
     if verbose {
         println!("netaddr {}", netaddr);
     }
-    let destination_path = format!("/tmp/{}", source_path.file_name().unwrap().to_string_lossy());
-    println!("copying {} to {}", source_path.to_string_lossy(), destination_path);
-    scp_to_device(verbose, target_options, &netaddr, &source_path, &destination_path)?;
+    let destination_path = format!(
+        "/tmp/{}",
+        source_path.file_name().unwrap().to_string_lossy()
+    );
+    println!(
+        "copying {} to {}",
+        source_path.to_string_lossy(),
+        destination_path
+    );
+    scp_to_device(
+        verbose,
+        target_options,
+        &netaddr,
+        &source_path,
+        &destination_path,
+    )?;
     Ok(destination_path)
 }
 
 fn run_program_on_target(
-    filename: &str,
-    verbose: bool,
-    target_options: &TargetOptions,
-    set_root_view: bool,
-    params: &[&str],
-    test_args: Option<&str>,
+    filename: &str, verbose: bool, target_options: &TargetOptions, set_root_view: bool,
+    params: &[&str], test_args: Option<&str>,
 ) -> Result<(), Error> {
     let source_path = PathBuf::from(&filename);
     let stripped_source_path = strip_binary(&source_path, target_options)?;
@@ -99,23 +105,24 @@ fn autotest(verbose: bool, release: bool, target_options: &TargetOptions) -> Res
     let mut watcher: RecommendedWatcher =
         Watcher::new(tx, Duration::from_secs(1)).context("autotest: watcher creation failed")?;
 
-    let cwd = std::fs::canonicalize(std::env::current_dir()?).context(
-        "autotest: canonicalize working directory",
-    )?;
+    let cwd = std::fs::canonicalize(std::env::current_dir()?)
+        .context("autotest: canonicalize working directory")?;
     let tgt = cwd.join("target");
     let git = cwd.join(".git");
 
-    watcher.watch(&cwd, RecursiveMode::Recursive).context("autotest: watch failed")?;
+    watcher
+        .watch(&cwd, RecursiveMode::Recursive)
+        .context("autotest: watch failed")?;
 
     println!("autotest: started");
     loop {
         let event = rx.recv().context("autotest: watch recv failed")?;
         match event {
-            notify::DebouncedEvent::Create(path) |
-            notify::DebouncedEvent::Write(path) |
-            notify::DebouncedEvent::Chmod(path) |
-            notify::DebouncedEvent::Remove(path) |
-            notify::DebouncedEvent::Rename(path, _) => {
+            notify::DebouncedEvent::Create(path)
+            | notify::DebouncedEvent::Write(path)
+            | notify::DebouncedEvent::Chmod(path)
+            | notify::DebouncedEvent::Remove(path)
+            | notify::DebouncedEvent::Rename(path, _) => {
                 // TODO(raggi): provide a fuller ignore flag/pattern match solution here.
                 if !path.starts_with(&tgt) && !path.starts_with(&git) {
                     println!("autotest: running tests because {:?}", path);
@@ -128,25 +135,24 @@ fn autotest(verbose: bool, release: bool, target_options: &TargetOptions) -> Res
 }
 
 fn build_tests(
-    verbose: bool,
-    release: bool,
-    target_options: &TargetOptions,
-    test_target: &str,
+    verbose: bool, release: bool, target_options: &TargetOptions, test_target: &str
 ) -> Result<bool, Error> {
-    run_tests(verbose, release, true, target_options, test_target, &[], None)?;
+    run_tests(
+        verbose,
+        release,
+        true,
+        target_options,
+        test_target,
+        &[],
+        None,
+    )?;
     Ok(true)
 }
 
 fn run_tests(
-    verbose: bool,
-    release: bool,
-    no_run: bool,
-    target_options: &TargetOptions,
-    test_target: &str,
-    params: &[&str],
-    target_params: Option<&str>,
+    verbose: bool, release: bool, no_run: bool, target_options: &TargetOptions, test_target: &str,
+    params: &[&str], target_params: Option<&str>,
 ) -> Result<(), Error> {
-
     let mut args = vec!["test"];
 
     if !test_target.is_empty() {
@@ -181,10 +187,7 @@ fn run_tests(
 }
 
 fn build_binary(
-    verbose: bool,
-    release: bool,
-    target_options: &TargetOptions,
-    params: &[&str],
+    verbose: bool, release: bool, target_options: &TargetOptions, params: &[&str]
 ) -> Result<(), Error> {
     let mut args = vec!["build"];
     for param in params {
@@ -195,10 +198,7 @@ fn build_binary(
 }
 
 fn check_binary(
-    verbose: bool,
-    release: bool,
-    target_options: &TargetOptions,
-    params: &[&str],
+    verbose: bool, release: bool, target_options: &TargetOptions, params: &[&str]
 ) -> Result<(), Error> {
     let mut args = vec!["check"];
     for param in params {
@@ -209,19 +209,23 @@ fn check_binary(
 }
 
 fn run_binary(
-    verbose: bool,
-    release: bool,
-    set_root_view: bool,
-    target_options: &TargetOptions,
+    verbose: bool, release: bool, set_root_view: bool, target_options: &TargetOptions,
     params: &[&str],
 ) -> Result<(), Error> {
-
     let mut args = vec!["run"];
     for param in params {
         args.push(param);
     }
 
-    run_cargo(verbose, release, set_root_view, &args, target_options, None, None)?;
+    run_cargo(
+        verbose,
+        release,
+        set_root_view,
+        &args,
+        target_options,
+        None,
+        None,
+    )?;
     Ok(())
 }
 
@@ -229,9 +233,10 @@ fn load_driver(verbose: bool, release: bool, target_options: &TargetOptions) -> 
     let args = vec!["build"];
     run_cargo(verbose, release, false, &args, target_options, None, None)?;
     let cwd = std::env::current_dir()?;
-    let package = cwd.file_name().ok_or(err_msg("No current directory"))?.to_str().ok_or(err_msg(
-        "Invalid current directory",
-    ))?;
+    let package = cwd.file_name()
+        .ok_or(err_msg("No current directory"))?
+        .to_str()
+        .ok_or(err_msg("Invalid current directory"))?;
     let filename = cargo_out_dir(target_options)?.join(format!("lib{}.so", package));
     let destination_path = copy_to_target(&filename, verbose, target_options)?;
     let command_string = format!("dm add-driver:{}", destination_path);
@@ -254,16 +259,10 @@ fn load_driver(verbose: bool, release: bool, target_options: &TargetOptions) -> 
 ///
 /// let target_options = TargetOptions::new(true, None);
 /// run_cargo(false, true, false, &["--help"], &target_options, None, None);
-///
 /// ```
 pub fn run_cargo(
-    verbose: bool,
-    release: bool,
-    set_root_view: bool,
-    args: &[&str],
-    target_options: &TargetOptions,
-    runner: Option<PathBuf>,
-    additional_target_args: Option<&str>,
+    verbose: bool, release: bool, set_root_view: bool, args: &[&str],
+    target_options: &TargetOptions, runner: Option<PathBuf>, additional_target_args: Option<&str>,
 ) -> Result<(), Error> {
     let set_root_view_arg = format!("--{}", SET_ROOT_VIEW);
     let mut target_args = vec!["--target", "x86_64-unknown-fuchsia"];
@@ -282,10 +281,11 @@ pub fn run_cargo(
         fs::canonicalize(std::env::current_exe()?)?
     };
 
-    let mut runner_args =
-        vec![
-            fargo_path.to_str().ok_or_else(|| err_msg("unable to convert path to utf8 encoding"))?,
-        ];
+    let mut runner_args = vec![
+        fargo_path
+            .to_str()
+            .ok_or_else(|| err_msg("unable to convert path to utf8 encoding"))?,
+    ];
 
     if verbose {
         runner_args.push("-v");
@@ -319,9 +319,7 @@ pub fn run_cargo(
         .env(
             "CARGO_TARGET_X86_64_UNKNOWN_FUCHSIA_RUSTFLAGS",
             format!(
-                "-C link-arg=--target=x86_64-unknown-fuchsia \
-                -C link-arg=--sysroot={} \
-                -Lnative={}",
+                "-C link-arg=--target=x86_64-unknown-fuchsia -C link-arg=--sysroot={} -Lnative={}",
                 sysroot_path(target_options)?.to_str().unwrap(),
                 shared_libraries_path(target_options)?.to_str().unwrap(),
             ),
@@ -330,10 +328,19 @@ pub fn run_cargo(
             "CARGO_TARGET_X86_64_UNKNOWN_FUCHSIA_LINKER",
             clang_linker_path(target_options)?.to_str().unwrap(),
         )
-        .env("CC", clang_c_compiler_path(target_options)?.to_str().unwrap())
-        .env("CXX", clang_cpp_compiler_path(target_options)?.to_str().unwrap())
+        .env(
+            "CC",
+            clang_c_compiler_path(target_options)?.to_str().unwrap(),
+        )
+        .env(
+            "CXX",
+            clang_cpp_compiler_path(target_options)?.to_str().unwrap(),
+        )
         .env("AR", clang_archiver_path(target_options)?.to_str().unwrap())
-        .env("RANLIB", clang_ranlib_path(target_options)?.to_str().unwrap())
+        .env(
+            "RANLIB",
+            clang_ranlib_path(target_options)?.to_str().unwrap(),
+        )
         .env("PKG_CONFIG_ALL_STATIC", "1")
         .env("PKG_CONFIG_ALLOW_CROSS", "1")
         .env("PKG_CONFIG_PATH", "")
@@ -348,10 +355,7 @@ pub fn run_cargo(
 
     let cargo_status = cmd.status()?;
     if !cargo_status.success() {
-        bail!(
-            "cargo exited with status {:?}",
-            cargo_status,
-        );
+        bail!("cargo exited with status {:?}", cargo_status,);
     }
 
     Ok(())
@@ -359,8 +363,8 @@ pub fn run_cargo(
 
 static CREATE_FACADE: &str = "create-facade";
 static FIDL_PARAM: &str = "fidl_interface_path";
-static FIDL_PARAM_HELP: &str = "gn path and label (i.e. //garnet/public/lib/app/fidl:fidl) \
-for the new facade";
+static FIDL_PARAM_HELP: &str =
+    "gn path and label (i.e. //garnet/public/lib/app/fidl:fidl) for the new facade";
 
 static SET_ROOT_VIEW: &str = "set-root-view";
 
@@ -375,22 +379,35 @@ pub fn run() -> Result<(), Error> {
         .version("v0.1.0")
         .setting(AppSettings::GlobalVersion)
         .about("Fargo is a prototype Fuchsia-specific wrapper around Cargo")
-        .arg(Arg::with_name("verbose").long("verbose").short("v").help(
-            "Print verbose output while performing commands",
-        ))
-        .arg(Arg::with_name("debug-os").long("debug-os").help(
-            "Use debug user.bootfs and ssh keys",
-        ))
-        .arg(Arg::with_name("device-name").long("device-name").short("N")
-        .value_name("device-name").help(
-            "Name of device to target, needed if there are multiple devices visible on the network",
-        ))
+        .arg(
+            Arg::with_name("verbose")
+                .long("verbose")
+                .short("v")
+                .help("Print verbose output while performing commands"),
+        )
+        .arg(
+            Arg::with_name("debug-os")
+                .long("debug-os")
+                .help("Use debug user.bootfs and ssh keys"),
+        )
+        .arg(
+            Arg::with_name("device-name")
+                .long("device-name")
+                .short("N")
+                .value_name("device-name")
+                .help(
+                    "Name of device to target, needed if there are multiple devices visible on \
+                     the network",
+                ),
+        )
         .subcommand(
             SubCommand::with_name("autotest")
                 .about("Auto build and test in Fuchsia device or emulator")
-                .arg(Arg::with_name("release").long("release").help(
-                    "Build release",
-                )),
+                .arg(
+                    Arg::with_name("release")
+                        .long("release")
+                        .help("Build release"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("build-tests")
@@ -401,16 +418,20 @@ pub fn run() -> Result<(), Error> {
                         .value_name("test")
                         .help("Test only the specified test target"),
                 )
-                .arg(Arg::with_name("release").long("release").help(
-                    "Build release",
-                )),
+                .arg(
+                    Arg::with_name("release")
+                        .long("release")
+                        .help("Build release"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("test")
                 .about("Run unit tests on Fuchsia device or emulator")
-                .arg(Arg::with_name("release").long("release").help(
-                    "Build release",
-                ))
+                .arg(
+                    Arg::with_name("release")
+                        .long("release")
+                        .help("Build release"),
+                )
                 .arg(
                     Arg::with_name("test")
                         .long("test")
@@ -428,44 +449,52 @@ pub fn run() -> Result<(), Error> {
         .subcommand(
             SubCommand::with_name("build")
                 .about("Build binary targeting Fuchsia device or emulator")
-                .arg(Arg::with_name("release").long("release").help(
-                    "Build release",
-                ))
+                .arg(
+                    Arg::with_name("release")
+                        .long("release")
+                        .help("Build release"),
+                )
                 .arg(
                     Arg::with_name("example")
                         .long("example")
                         .takes_value(true)
                         .help("Build a specific example from the examples/ dir."),
                 )
-                .arg(Arg::with_name("examples").long("examples").help(
-                    "Build all examples in the examples/ dir.",
-                )),
+                .arg(
+                    Arg::with_name("examples")
+                        .long("examples")
+                        .help("Build all examples in the examples/ dir."),
+                ),
         )
         .subcommand(
             SubCommand::with_name(CHECK)
                 .about("Check binary targeting Fuchsia device or emulator")
-                .arg(Arg::with_name(RELEASE).long(RELEASE).help(
-                    "Check release",
-                ))
+                .arg(Arg::with_name(RELEASE).long(RELEASE).help("Check release"))
                 .arg(
                     Arg::with_name(EXAMPLE)
                         .long(EXAMPLE)
                         .takes_value(true)
                         .help("Check a specific example from the examples/ dir."),
                 )
-                .arg(Arg::with_name(EXAMPLES).long(EXAMPLES).help(
-                    "Check all examples in the examples/ dir.",
-                )),
+                .arg(
+                    Arg::with_name(EXAMPLES)
+                        .long(EXAMPLES)
+                        .help("Check all examples in the examples/ dir."),
+                ),
         )
         .subcommand(
             SubCommand::with_name("run")
                 .about("Run binary on Fuchsia device or emulator")
-                .arg(Arg::with_name("release").long("release").help(
-                    "Build release",
-                ))
-                .arg(Arg::with_name(SET_ROOT_VIEW).long(SET_ROOT_VIEW).help(
-                    "Use set_root_view to run binary.",
-                ))
+                .arg(
+                    Arg::with_name("release")
+                        .long("release")
+                        .help("Build release"),
+                )
+                .arg(
+                    Arg::with_name(SET_ROOT_VIEW)
+                        .long(SET_ROOT_VIEW)
+                        .help("Use set_root_view to run binary."),
+                )
                 .arg(
                     Arg::with_name("example")
                         .long("example")
@@ -476,46 +505,48 @@ pub fn run() -> Result<(), Error> {
         .subcommand(
             SubCommand::with_name("load-driver")
                 .about("Build driver and load it on Fuchsia device or emulator.")
-                .arg(Arg::with_name("release").long("release").help(
-                    "Build release",
-                ))
+                .arg(
+                    Arg::with_name("release")
+                        .long("release")
+                        .help("Build release"),
+                ),
         )
-        .subcommand(
-            SubCommand::with_name("list-devices")
-                .about("List visible Fuchsia devices")
-        )
+        .subcommand(SubCommand::with_name("list-devices").about("List visible Fuchsia devices"))
         .subcommand(
             SubCommand::with_name("start")
                 .about("Start a Fuchsia emulator")
-                .arg(Arg::with_name("graphics").short("g").help(
-                    "Start a simulator with graphics enabled",
-                ))
+                .arg(
+                    Arg::with_name("graphics")
+                        .short("g")
+                        .help("Start a simulator with graphics enabled"),
+                )
                 .arg(Arg::with_name("no_net"))
                 .help("Don't set up networking."),
         )
-        .subcommand(SubCommand::with_name("stop").about(
-            "Stop all Fuchsia emulators",
-        ))
-        .subcommand(SubCommand::with_name("enable-networking").about(
-            "Enable networking for a running emulator",
-        ))
+        .subcommand(SubCommand::with_name("stop").about("Stop all Fuchsia emulators"))
+        .subcommand(
+            SubCommand::with_name("enable-networking")
+                .about("Enable networking for a running emulator"),
+        )
         .subcommand(
             SubCommand::with_name("restart")
                 .about("Stop all Fuchsia emulators and start a new one")
-                .arg(Arg::with_name("graphics").short("g").help(
-                    "Start a simulator with graphics enabled",
-                ))
+                .arg(
+                    Arg::with_name("graphics")
+                        .short("g")
+                        .help("Start a simulator with graphics enabled"),
+                )
                 .arg(Arg::with_name("no_net"))
                 .help("Don't set up networking."),
         )
-        .subcommand(SubCommand::with_name("ssh").about(
-            "Open a shell on Fuchsia device or emulator",
-        ))
+        .subcommand(
+            SubCommand::with_name("ssh").about("Open a shell on Fuchsia device or emulator"),
+        )
         .subcommand(
             SubCommand::with_name("cargo")
                 .about(
-                    "Run a cargo command for Fuchsia. Use -- to indicate that all \
-                         following arguments should be passed to cargo.",
+                    "Run a cargo command for Fuchsia. Use -- to indicate that all following \
+                     arguments should be passed to cargo.",
                 )
                 .arg(Arg::with_name("cargo_params").index(1).multiple(true)),
         )
@@ -528,12 +559,16 @@ pub fn run() -> Result<(), Error> {
                         .value_name("args")
                         .help("arguments to pass to the test runner"),
                 )
-                .arg(Arg::with_name(SET_ROOT_VIEW).long(SET_ROOT_VIEW).help(
-                    "Use set_root_view to run binary.",
-                ))
-                .arg(Arg::with_name("run_on_target_params").index(1).multiple(
-                    true,
-                ))
+                .arg(
+                    Arg::with_name(SET_ROOT_VIEW)
+                        .long(SET_ROOT_VIEW)
+                        .help("Use set_root_view to run binary."),
+                )
+                .arg(
+                    Arg::with_name("run_on_target_params")
+                        .index(1)
+                        .multiple(true),
+                )
                 .setting(AppSettings::Hidden),
         )
         .subcommand(
@@ -543,27 +578,31 @@ pub fn run() -> Result<(), Error> {
         )
         .subcommand(
             SubCommand::with_name("configure")
-                .about(
-                    "Run a configure script for the cross compilation environment",
-                )
+                .about("Run a configure script for the cross compilation environment")
                 .arg(Arg::with_name("configure_param").index(1).multiple(true))
-                .arg(Arg::with_name("no-host").long("no-host").help(
-                    "Don't pass --host to configure",
-                )),
+                .arg(
+                    Arg::with_name("no-host")
+                        .long("no-host")
+                        .help("Don't pass --host to configure"),
+                ),
         )
         .subcommand(
             SubCommand::with_name(CREATE_FACADE)
-                .about(
-                    "Create an in-tree facade crate for a FIDL interface.",
-                )
-                .arg(Arg::with_name(FIDL_PARAM).
-                help(FIDL_PARAM_HELP).index(1).required(true))
+                .about("Create an in-tree facade crate for a FIDL interface.")
+                .arg(
+                    Arg::with_name(FIDL_PARAM)
+                        .help(FIDL_PARAM_HELP)
+                        .index(1)
+                        .required(true),
+                ),
         )
         .get_matches();
 
     let verbose = matches.is_present("verbose");
-    let target_options =
-        TargetOptions::new(!matches.is_present("debug-os"), matches.value_of("device-name"));
+    let target_options = TargetOptions::new(
+        !matches.is_present("debug-os"),
+        matches.value_of("device-name"),
+    );
 
     if verbose {
         println!("target_options = {:#?}", target_options);
@@ -575,12 +614,18 @@ pub fn run() -> Result<(), Error> {
     }
 
     if let Some(autotest_matches) = matches.subcommand_matches("autotest") {
-        return autotest(verbose, autotest_matches.is_present("release"), &target_options);
+        return autotest(
+            verbose,
+            autotest_matches.is_present("release"),
+            &target_options,
+        );
     }
 
     if let Some(test_matches) = matches.subcommand_matches("test") {
-        let test_params =
-            test_matches.values_of("test_params").map(|x| x.collect()).unwrap_or_else(|| vec![]);
+        let test_params = test_matches
+            .values_of("test_params")
+            .map(|x| x.collect())
+            .unwrap_or_else(|| vec![]);
         let test_target = test_matches.value_of("test").unwrap_or("");
         let test_args = test_matches.value_of("test_args");
         return run_tests(
@@ -595,7 +640,6 @@ pub fn run() -> Result<(), Error> {
     }
 
     if let Some(build_matches) = matches.subcommand_matches("build") {
-
         let mut params = vec![];
         if let Some(example) = build_matches.value_of("example") {
             params.push("--example");
@@ -606,12 +650,16 @@ pub fn run() -> Result<(), Error> {
             params.push("--examples");
         }
 
-        build_binary(verbose, build_matches.is_present("release"), &target_options, &params)?;
+        build_binary(
+            verbose,
+            build_matches.is_present("release"),
+            &target_options,
+            &params,
+        )?;
         return Ok(());
     }
 
     if let Some(check_matches) = matches.subcommand_matches(CHECK) {
-
         let mut params = vec![];
         if let Some(example) = check_matches.value_of(EXAMPLE) {
             params.push("--example");
@@ -622,7 +670,12 @@ pub fn run() -> Result<(), Error> {
             params.push("--examples");
         }
 
-        check_binary(verbose, check_matches.is_present(RELEASE), &target_options, &params)?;
+        check_binary(
+            verbose,
+            check_matches.is_present(RELEASE),
+            &target_options,
+            &params,
+        )?;
         return Ok(());
     }
 
@@ -643,7 +696,11 @@ pub fn run() -> Result<(), Error> {
     }
 
     if let Some(load_driver_matches) = matches.subcommand_matches("load-driver") {
-        return load_driver(verbose, load_driver_matches.is_present("release"), &target_options);
+        return load_driver(
+            verbose,
+            load_driver_matches.is_present("release"),
+            &target_options,
+        );
     }
 
     if let Some(build_test_matches) = matches.subcommand_matches("build-tests") {
@@ -699,9 +756,19 @@ pub fn run() -> Result<(), Error> {
     }
 
     if let Some(cargo_matches) = matches.subcommand_matches("cargo") {
-        let cargo_params =
-            cargo_matches.values_of("cargo_params").map(|x| x.collect()).unwrap_or_else(|| vec![]);
-        return run_cargo(verbose, false, false, &cargo_params, &target_options, None, None);
+        let cargo_params = cargo_matches
+            .values_of("cargo_params")
+            .map(|x| x.collect())
+            .unwrap_or_else(|| vec![]);
+        return run_cargo(
+            verbose,
+            false,
+            false,
+            &cargo_params,
+            &target_options,
+            None,
+            None,
+        );
     }
 
     if let Some(run_on_target_matches) = matches.subcommand_matches("run-on-target") {
@@ -722,8 +789,10 @@ pub fn run() -> Result<(), Error> {
     }
 
     if let Some(pkg_matches) = matches.subcommand_matches("pkg-config") {
-        let pkg_params =
-            pkg_matches.values_of("pkgconfig_param").map(|x| x.collect()).unwrap_or_else(|| vec![]);
+        let pkg_params = pkg_matches
+            .values_of("pkgconfig_param")
+            .map(|x| x.collect())
+            .unwrap_or_else(|| vec![]);
         let exit_code = run_pkg_config(verbose, &pkg_params, &target_options)?;
         if exit_code != 0 {
             ::std::process::exit(exit_code);
@@ -746,7 +815,9 @@ pub fn run() -> Result<(), Error> {
     }
 
     if let Some(create_facade_matches) = matches.subcommand_matches(CREATE_FACADE) {
-        let create_facade_param = create_facade_matches.value_of(FIDL_PARAM).unwrap_or_else(|| "");
+        let create_facade_param = create_facade_matches
+            .value_of(FIDL_PARAM)
+            .unwrap_or_else(|| "");
         create_facade(&create_facade_param, &target_options).context("create facade failed")?;
     }
 

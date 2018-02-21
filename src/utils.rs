@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 use failure::{Error, ResultExt};
-use sdk::{TargetOptions, strip_tool_path};
+use sdk::{strip_tool_path, TargetOptions};
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;

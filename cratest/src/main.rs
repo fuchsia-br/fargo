@@ -76,7 +76,10 @@ fn main() {
         values_t!(matches, "excludes", String).unwrap_or_else(|_| Vec::new()),
     );
 
-    println!("Running cratest on the top {} crates from crates.io...", num);
+    println!(
+        "Running cratest on the top {} crates from crates.io...",
+        num
+    );
 
     let crate_uri: String = [
         "https://crates.io/api/v1/crates?page=1&per_page=",
@@ -100,9 +103,15 @@ fn main() {
     let res: Crates = serde_json::from_str(&content).unwrap();
 
     if restart_emu {
-        Command::new("fargo").arg("restart").status().expect("failed to run fargo restart");
+        Command::new("fargo")
+            .arg("restart")
+            .status()
+            .expect("failed to run fargo restart");
     } else if start_emu {
-        Command::new("fargo").arg("start").status().expect("failed to run fargo start");
+        Command::new("fargo")
+            .arg("start")
+            .status()
+            .expect("failed to run fargo start");
     }
 
     let tmpdir = TempDir::new("cratest").unwrap();
@@ -123,9 +132,11 @@ fn main() {
             fs::create_dir(&crdir).unwrap();
             Repository::clone(&cr.repository, &crdir).unwrap();
 
-            let output = Command::new("fargo").arg("test").current_dir(&crdir).output().expect(
-                "failed to execute fargo test",
-            );
+            let output = Command::new("fargo")
+                .arg("test")
+                .current_dir(&crdir)
+                .output()
+                .expect("failed to execute fargo test");
             println!("crate: {}", &cr.id);
             println!("status: {}", output.status);
             if verbose {

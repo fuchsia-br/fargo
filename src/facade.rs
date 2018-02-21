@@ -1,5 +1,5 @@
 use failure::{Error, ResultExt};
-use sdk::{TargetOptions, fuchsia_root, fx_path};
+use sdk::{fuchsia_root, fx_path, TargetOptions};
 use std::collections::BTreeMap;
 use std::fs;
 use std::fs::File;
@@ -85,9 +85,12 @@ mod tests {
         assert_eq!(facade_target.crate_name(), "garnet_public_lib_app_fidl");
         let facade_target = FacadeTarget::parse("//foo/bar/bar:fidl").unwrap();
         assert_eq!(facade_target.crate_name(), "foo_bar_bar_fidl");
-        let facade_target = FacadeTarget::parse("//garnet/public/lib/app/fidl:service_provider")
-            .unwrap();
-        assert_eq!(facade_target.crate_name(), "garnet_public_lib_app_fidl_service_provider");
+        let facade_target =
+            FacadeTarget::parse("//garnet/public/lib/app/fidl:service_provider").unwrap();
+        assert_eq!(
+            facade_target.crate_name(),
+            "garnet_public_lib_app_fidl_service_provider"
+        );
     }
 }
 
@@ -103,9 +106,7 @@ fn ensure_directory_at_path(path: &Path, path_description: &str) -> Result<(), E
 }
 
 fn write_lib_rs_file(
-    crate_path: &Path,
-    crate_name: &str,
-    interface_relative: &str,
+    crate_path: &Path, crate_name: &str, interface_relative: &str
 ) -> Result<(), Error> {
     ensure_directory_at_path(&crate_path, "facade crate directory")?;
     let src_path = crate_path.join("src");
@@ -126,7 +127,6 @@ fn write_cargo_toml_file(crate_path: &Path, crate_name: &str) -> Result<(), Erro
             File::create(cargo_toml_path).context("can't create or truncate Cargo.toml file")?;
         let contents = create_cargo_toml_contents(&crate_name);
         file.write_all(&contents.as_bytes())?;
-
     }
     Ok(())
 }
@@ -145,10 +145,7 @@ fn format_gn_file(path: &Path, target_options: &TargetOptions) -> Result<(), Err
 }
 
 fn write_build_gn_file(
-    crate_path: &Path,
-    crate_name: &str,
-    interface_relative: &str,
-    module_name: &str,
+    crate_path: &Path, crate_name: &str, interface_relative: &str, module_name: &str,
     target_options: &TargetOptions,
 ) -> Result<(), Error> {
     let build_gn_path = crate_path.join("BUILD.gn");
@@ -167,9 +164,7 @@ fn write_build_gn_file(
 }
 
 fn update_workspace_file(
-    crate_path: &Path,
-    crate_name: &str,
-    fuchsia_root: &Path,
+    crate_path: &Path, crate_name: &str, fuchsia_root: &Path
 ) -> Result<(), Error> {
     let garnet_root = fuchsia_root.join("garnet");
     let workspace_path = garnet_root.join("Cargo.toml");
@@ -186,7 +181,9 @@ fn update_workspace_file(
         members.push(relative_crate_path_string.clone());
         members.sort();
         members.dedup();
-        let patch = Patch { path: relative_crate_path_string };
+        let patch = Patch {
+            path: relative_crate_path_string,
+        };
         let patch_section = decoded.patch.as_mut().unwrap();
         let crates_io = patch_section.crates_io.as_mut().unwrap();
         crates_io.insert(String::from(crate_name), patch);
@@ -205,7 +202,9 @@ pub fn create_facade(path_to_interface: &str, options: &TargetOptions) -> Result
     let interface_relative_path = interface_full_path.strip_prefix(&fuchsia_root)?;
     let interface_relative = interface_relative_path.to_str().unwrap();
     let crate_name = facade_target.crate_name();
-    let crate_path = fuchsia_root.join("garnet/public/rust/fidl_crates").join(&crate_name);
+    let crate_path = fuchsia_root
+        .join("garnet/public/rust/fidl_crates")
+        .join(&crate_name);
 
     write_lib_rs_file(&crate_path, &crate_name, &interface_relative)?;
     write_cargo_toml_file(&crate_path, &crate_name)?;
@@ -276,8 +275,6 @@ rust_library("{}") {{
   ]
   }}
 "##,
-        crate_name,
-        interface_path,
-        module_name
+        crate_name, interface_path, module_name
     )
 }

@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use failure::{Error, ResultExt, err_msg};
-use sdk::{TargetOptions, fuchsia_root, target_out_dir};
+use failure::{err_msg, Error, ResultExt};
+use sdk::{fuchsia_root, target_out_dir, TargetOptions};
 use std::{str, thread, time};
 use std::env;
 use std::path::{Path, PathBuf};
@@ -18,13 +18,26 @@ pub fn netaddr(verbose: bool, target_options: &TargetOptions) -> Result<String, 
         args.push(device_name);
     }
     let netaddr_result = Command::new(netaddr_binary).args(args).output()?;
-    let result = str::from_utf8(&netaddr_result.stdout).unwrap().trim().to_string();
+    let result = str::from_utf8(&netaddr_result.stdout)
+        .unwrap()
+        .trim()
+        .to_string();
     if verbose {
-        println!("netaddr status = {}, result = {}", netaddr_result.status, result);
+        println!(
+            "netaddr status = {}, result = {}",
+            netaddr_result.status, result
+        );
     }
     if !netaddr_result.status.success() {
-        let err_str = str::from_utf8(&netaddr_result.stderr).unwrap().trim().to_string();
-        bail!("netaddr failed with status {:?}: {}", netaddr_result.status, err_str);
+        let err_str = str::from_utf8(&netaddr_result.stderr)
+            .unwrap()
+            .trim()
+            .to_string();
+        bail!(
+            "netaddr failed with status {:?}: {}",
+            netaddr_result.status,
+            err_str
+        );
     }
     Ok(result)
 }
@@ -54,10 +67,7 @@ static SSH_OPTIONS: &'static [&str] = &[
 ];
 
 pub fn scp_to_device(
-    verbose: bool,
-    target_options: &TargetOptions,
-    netaddr: &str,
-    source_path: &PathBuf,
+    verbose: bool, target_options: &TargetOptions, netaddr: &str, source_path: &PathBuf,
     destination_path: &str,
 ) -> Result<(), Error> {
     let destination_with_address = format!("[{}]:{}", netaddr, destination_path);
@@ -121,10 +131,12 @@ pub fn ssh(verbose: bool, target_options: &TargetOptions, command: &str) -> Resu
 pub fn setup_network_mac(user: &str) -> Result<(), Error> {
     println!("Calling sudo ifconfig to bring up tap0 interface; password may be required.");
 
-    let chown_status =
-        Command::new("sudo").arg("chown").arg(user).arg("/dev/tap0").status().context(
-            "couldn't run chown",
-        )?;
+    let chown_status = Command::new("sudo")
+        .arg("chown")
+        .arg(user)
+        .arg("/dev/tap0")
+        .status()
+        .context("couldn't run chown")?;
 
     if !chown_status.success() {
         bail!("chown failed: {}", chown_status);
@@ -167,17 +179,19 @@ pub fn setup_network_linux(user: &str) -> Result<(), Error> {
     // Create the tap network device if it doesn't exist.
     if !Path::new("/sys/class/net/qemu").exists() {
         println!(
-            "Qemu tap device not found. Using sudo and tunctl to create \
-            tap network device; password may be required."
+            "Qemu tap device not found. Using sudo and tunctl to create tap network device; \
+             password may be required."
         );
         let tunctl_status = Command::new("sudo")
             .args(&["tunctl", "-b", "-u", user, "-t", "qemu"])
             .stdout(Stdio::null())
             .status()
-            .map_err(|e| if e.kind() == ::std::io::ErrorKind::NotFound {
-                err_msg(TUNCTL_NOT_FOUND_ERROR)
-            } else {
-                err_msg("tunctl failed to create a new tap network device")
+            .map_err(|e| {
+                if e.kind() == ::std::io::ErrorKind::NotFound {
+                    err_msg(TUNCTL_NOT_FOUND_ERROR)
+                } else {
+                    err_msg("tunctl failed to create a new tap network device")
+                }
             })?;
 
         if !tunctl_status.success() {
@@ -185,10 +199,12 @@ pub fn setup_network_linux(user: &str) -> Result<(), Error> {
         }
     }
 
-    let ifconfig_status =
-        Command::new("sudo").arg("ifconfig").arg("qemu").arg("up").status().context(
-            "couldn't run ifconfig",
-        )?;
+    let ifconfig_status = Command::new("sudo")
+        .arg("ifconfig")
+        .arg("qemu")
+        .arg("up")
+        .status()
+        .context("couldn't run ifconfig")?;
 
     if !ifconfig_status.success() {
         bail!("ifconfig failed");
@@ -204,14 +220,15 @@ pub fn setup_network() -> Result<(), Error> {
     } else {
         setup_network_linux(&user)?;
     }
-    Command::new("stty").arg("sane").status().context("couldn't run stty")?;
+    Command::new("stty")
+        .arg("sane")
+        .status()
+        .context("couldn't run stty")?;
     Ok(())
 }
 
 pub fn start_emulator(
-    with_graphics: bool,
-    with_networking: bool,
-    target_options: &TargetOptions,
+    with_graphics: bool, with_networking: bool, target_options: &TargetOptions
 ) -> Result<(), Error> {
     let fuchsia_root = fuchsia_root(target_options)?;
     let fx_script = fuchsia_root.join("scripts/fx");
@@ -235,7 +252,11 @@ pub fn start_emulator(
 
     println!("emulator started with process ID {}", child.id());
 
-    if with_networking { setup_network() } else { Ok(()) }
+    if with_networking {
+        setup_network()
+    } else {
+        Ok(())
+    }
 }
 
 pub fn stop_emulator() -> Result<(), Error> {

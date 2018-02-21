@@ -63,8 +63,8 @@ pub fn fuchsia_root(options: &TargetOptions) -> Result<PathBuf, Error> {
             } else {
                 bail!(
                     "FUCHSIA_ROOT not set and current directory is not in a Fuchsia tree with a \
-                    release-x64 build. You must set the environmental variable FUCHSIA_ROOT to \
-                    point to a Fuchsia tree with a release-x64 build."
+                     release-x64 build. You must set the environmental variable FUCHSIA_ROOT to \
+                     point to a Fuchsia tree with a release-x64 build."
                 )
             }
         }
@@ -74,10 +74,13 @@ pub fn fuchsia_root(options: &TargetOptions) -> Result<PathBuf, Error> {
 }
 
 pub fn possible_target_out_dir(
-    fuchsia_root: &PathBuf,
-    options: &TargetOptions,
+    fuchsia_root: &PathBuf, options: &TargetOptions
 ) -> Result<PathBuf, Error> {
-    let out_dir_name_prefix = if options.release_os { "release" } else { "debug" };
+    let out_dir_name_prefix = if options.release_os {
+        "release"
+    } else {
+        "debug"
+    };
     let out_dir_name = format!("{}-{}", out_dir_name_prefix, options.target_cpu);
     let target_out_dir = fuchsia_root.join("out").join(out_dir_name);
     if !target_out_dir.exists() {
@@ -99,7 +102,11 @@ pub fn target_gen_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
 pub fn cargo_out_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
     let fuchsia_root = fuchsia_root(options)?;
     let target_triple = format!("{}-unknown-fuchsia", options.target_cpu_linker);
-    Ok(fuchsia_root.join("garnet").join("target").join(target_triple).join("debug"))
+    Ok(fuchsia_root
+        .join("garnet")
+        .join("target")
+        .join(target_triple)
+        .join("debug"))
 }
 
 pub fn strip_tool_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
@@ -107,20 +114,33 @@ pub fn strip_tool_path(target_options: &TargetOptions) -> Result<PathBuf, Error>
 }
 
 pub fn sysroot_path(options: &TargetOptions) -> Result<PathBuf, Error> {
-    let zircon_name =
-        if options.target_cpu == "x64" { "build-x64" } else { "build-arm64" };
-    Ok(fuchsia_root(&options)?.join("out").join("build-zircon").join(zircon_name).join("sysroot"))
+    let zircon_name = if options.target_cpu == "x64" {
+        "build-x64"
+    } else {
+        "build-arm64"
+    };
+    Ok(fuchsia_root(&options)?
+        .join("out")
+        .join("build-zircon")
+        .join(zircon_name)
+        .join("sysroot"))
 }
 
 pub fn shared_libraries_path(options: &TargetOptions) -> Result<PathBuf, Error> {
-    let shared_name =
-        if options.target_cpu == "x64" { "x64-shared" } else { "arm64-shared" };
+    let shared_name = if options.target_cpu == "x64" {
+        "x64-shared"
+    } else {
+        "arm64-shared"
+    };
     Ok(fuchsia_root(&options)?.join("out").join(shared_name))
 }
 
 pub fn toolchain_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
     let platform_name = if is_mac() { "mac-x64" } else { "linux-x64" };
-    Ok(fuchsia_root(target_options)?.join("buildtools").join(platform_name).join("clang"))
+    Ok(fuchsia_root(target_options)?
+        .join("buildtools")
+        .join(platform_name)
+        .join("clang"))
 }
 
 pub fn clang_linker_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
@@ -140,7 +160,9 @@ pub fn clang_archiver_path(target_options: &TargetOptions) -> Result<PathBuf, Er
 }
 
 pub fn clang_ranlib_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
-    Ok(toolchain_path(target_options)?.join("bin").join("llvm-ranlib"))
+    Ok(toolchain_path(target_options)?
+        .join("bin")
+        .join("llvm-ranlib"))
 }
 
 pub fn fx_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
