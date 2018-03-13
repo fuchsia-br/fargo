@@ -55,7 +55,7 @@ preparation for using fargo
 
     ./scripts/fx set-layer garnet
     .jiri_root/bin/jiri update
-    ./scripts/fx set x86 --release
+    ./scripts/fx set x64 --release
     ./scripts/fx build-zircon
     ./scripts/fx build
 
