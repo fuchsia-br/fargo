@@ -193,6 +193,20 @@ fn build_binary(
     run_cargo(verbose, release, false, &args, target_options, None, None)
 }
 
+fn check_binary(
+    verbose: bool,
+    release: bool,
+    target_options: &TargetOptions,
+    params: &[&str],
+) -> Result<(), Error> {
+    let mut args = vec!["check"];
+    for param in params {
+        args.push(param);
+    }
+
+    run_cargo(verbose, release, false, &args, target_options, None, None)
+}
+
 fn run_binary(
     verbose: bool,
     release: bool,
@@ -347,6 +361,11 @@ for the new facade";
 
 static SET_ROOT_VIEW: &str = "set-root-view";
 
+static CHECK: &str = "check";
+static RELEASE: &str = "release";
+static EXAMPLE: &str = "example";
+static EXAMPLES: &str = "examples";
+
 #[doc(hidden)]
 pub fn run() -> Result<(), Error> {
     let matches = App::new("fargo")
@@ -417,6 +436,22 @@ pub fn run() -> Result<(), Error> {
                 )
                 .arg(Arg::with_name("examples").long("examples").help(
                     "Build all examples in the examples/ dir.",
+                )),
+        )
+        .subcommand(
+            SubCommand::with_name(CHECK)
+                .about("Check binary targeting Fuchsia device or emulator")
+                .arg(Arg::with_name(RELEASE).long(RELEASE).help(
+                    "Check release",
+                ))
+                .arg(
+                    Arg::with_name(EXAMPLE)
+                        .long(EXAMPLE)
+                        .takes_value(true)
+                        .help("Check a specific example from the examples/ dir."),
+                )
+                .arg(Arg::with_name(EXAMPLES).long(EXAMPLES).help(
+                    "Check all examples in the examples/ dir.",
                 )),
         )
         .subcommand(
@@ -569,6 +604,22 @@ pub fn run() -> Result<(), Error> {
         }
 
         build_binary(verbose, build_matches.is_present("release"), &target_options, &params)?;
+        return Ok(());
+    }
+
+    if let Some(check_matches) = matches.subcommand_matches(CHECK) {
+
+        let mut params = vec![];
+        if let Some(example) = check_matches.value_of(EXAMPLE) {
+            params.push("--example");
+            params.push(example);
+        }
+
+        if check_matches.is_present(EXAMPLES) {
+            params.push("--examples");
+        }
+
+        check_binary(verbose, check_matches.is_present(RELEASE), &target_options, &params)?;
         return Ok(());
     }
 
