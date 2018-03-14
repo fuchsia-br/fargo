@@ -112,6 +112,12 @@ pub fn sysroot_path(options: &TargetOptions) -> Result<PathBuf, Error> {
     Ok(fuchsia_root(&options)?.join("out").join("build-zircon").join(zircon_name).join("sysroot"))
 }
 
+pub fn shared_libraries_path(options: &TargetOptions) -> Result<PathBuf, Error> {
+    let shared_name =
+        if options.target_cpu == "x64" { "x64-shared" } else { "arm64-shared" };
+    Ok(fuchsia_root(&options)?.join("out").join(shared_name))
+}
+
 pub fn toolchain_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
     let platform_name = if is_mac() { "mac-x64" } else { "linux-x64" };
     Ok(fuchsia_root(target_options)?.join("buildtools").join(platform_name).join("clang"))

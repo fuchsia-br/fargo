@@ -28,7 +28,8 @@ use device::{enable_networking, netaddr, netls, scp_to_device, ssh, start_emulat
 use facade::create_facade;
 use failure::{Error, ResultExt, err_msg};
 use sdk::{FuchsiaConfig, cargo_out_dir, clang_archiver_path, clang_c_compiler_path,
-          clang_cpp_compiler_path, clang_linker_path, clang_ranlib_path, sysroot_path,
+          clang_cpp_compiler_path, clang_linker_path, clang_ranlib_path, shared_libraries_path,
+          sysroot_path,
           target_gen_dir};
 pub use sdk::TargetOptions;
 use std::fs;
@@ -319,8 +320,10 @@ pub fn run_cargo(
             "CARGO_TARGET_X86_64_UNKNOWN_FUCHSIA_RUSTFLAGS",
             format!(
                 "-C link-arg=--target=x86_64-unknown-fuchsia \
-                -C link-arg=--sysroot={}",
-                sysroot_path(target_options)?.to_str().unwrap()
+                -C link-arg=--sysroot={} \
+                -Lnative={}",
+                sysroot_path(target_options)?.to_str().unwrap(),
+                shared_libraries_path(target_options)?.to_str().unwrap(),
             ),
         )
         .env(
