@@ -42,16 +42,35 @@ impl<'a> TargetOptions<'a> {
     }
 }
 
-pub fn fuchsia_root(options: &TargetOptions) -> Result<PathBuf, Error> {
-    let fuchsia_root_value = if let Ok(fuchsia_root_value) = env::var("FUCHSIA_ROOT") {
-        let fuchsia_root_path = PathBuf::from(&fuchsia_root_value);
-        if !fuchsia_root_path.is_dir() {
+fn get_path_from_env(env_name: &str, require_dir: bool) -> Result<Option<PathBuf>, Error> {
+    if let Ok(file_value) = env::var(env_name) {
+        let file_path = PathBuf::from(&file_value);
+        if !file_path.exists() {
             bail!(
-                "FUCHSIA_ROOT is set to '{}' but that path does not point to a directory.",
-                &fuchsia_root_value
+                "{} is set to '{}' but nothing exists at that path.",
+                env_name,
+                &file_value
             );
         }
-        fuchsia_root_path
+        if require_dir {
+            if !file_path.is_dir() {
+                bail!(
+                    "{} is set to '{}' but that path does not point to a directory.",
+                    env_name,
+                    &file_value
+                );
+            }
+        }
+        return Ok(Some(file_path));
+    }
+    Ok(None)
+}
+
+pub fn fuchsia_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
+    let fuchsia_dir = if let Some(fuchsia_root) = get_path_from_env("FUCHSIA_ROOT", true)? {
+        fuchsia_root
+    } else if let Some(fuchsia_dir) = get_path_from_env("FUCHSIA_DIR", true)? {
+        fuchsia_dir
     } else {
         let mut path = env::current_dir().unwrap();
         loop {
@@ -62,19 +81,19 @@ pub fn fuchsia_root(options: &TargetOptions) -> Result<PathBuf, Error> {
                 path.to_path_buf()
             } else {
                 bail!(
-                    "FUCHSIA_ROOT not set and current directory is not in a Fuchsia tree with a \
-                     release-x64 build. You must set the environmental variable FUCHSIA_ROOT to \
+                    "FUCHSIA_DIR not set and current directory is not in a Fuchsia tree with a \
+                     release-x64 build. You must set the environmental variable FUCHSIA_DIR to \
                      point to a Fuchsia tree with a release-x64 build."
                 )
             }
         }
     };
 
-    Ok(PathBuf::from(fuchsia_root_value))
+    Ok(fuchsia_dir)
 }
 
 pub fn possible_target_out_dir(
-    fuchsia_root: &PathBuf, options: &TargetOptions
+    fuchsia_dir: &PathBuf, options: &TargetOptions
 ) -> Result<PathBuf, Error> {
     let out_dir_name_prefix = if options.release_os {
         "release"
@@ -82,7 +101,7 @@ pub fn possible_target_out_dir(
         "debug"
     };
     let out_dir_name = format!("{}-{}", out_dir_name_prefix, options.target_cpu);
-    let target_out_dir = fuchsia_root.join("out").join(out_dir_name);
+    let target_out_dir = fuchsia_dir.join("out").join(out_dir_name);
     if !target_out_dir.exists() {
         bail!("no target out directory found at  {:?}", target_out_dir);
     }
@@ -90,8 +109,8 @@ pub fn possible_target_out_dir(
 }
 
 pub fn target_out_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
-    let fuchsia_root = fuchsia_root(options)?;
-    possible_target_out_dir(&fuchsia_root, options)
+    let fuchsia_dir = fuchsia_dir(options)?;
+    possible_target_out_dir(&fuchsia_dir, options)
 }
 
 pub fn target_gen_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
@@ -100,9 +119,9 @@ pub fn target_gen_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
 }
 
 pub fn cargo_out_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
-    let fuchsia_root = fuchsia_root(options)?;
+    let fuchsia_dir = fuchsia_dir(options)?;
     let target_triple = format!("{}-unknown-fuchsia", options.target_cpu_linker);
-    Ok(fuchsia_root
+    Ok(fuchsia_dir
         .join("garnet")
         .join("target")
         .join(target_triple)
@@ -119,7 +138,7 @@ pub fn sysroot_path(options: &TargetOptions) -> Result<PathBuf, Error> {
     } else {
         "build-arm64"
     };
-    Ok(fuchsia_root(&options)?
+    Ok(fuchsia_dir(&options)?
         .join("out")
         .join("build-zircon")
         .join(zircon_name)
@@ -132,25 +151,18 @@ pub fn shared_libraries_path(options: &TargetOptions) -> Result<PathBuf, Error> 
     } else {
         "arm64-shared"
     };
-    Ok(fuchsia_root(&options)?.join("out").join(shared_name))
+    Ok(fuchsia_dir(&options)?.join("out").join(shared_name))
 }
 
 fn buildtools_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
     let platform_name = if is_mac() { "mac-x64" } else { "linux-x64" };
-    Ok(fuchsia_root(target_options)?
+    Ok(fuchsia_dir(target_options)?
         .join("buildtools")
         .join(platform_name))
 }
 
 pub fn cargo_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
-    if let Ok(cargo_path_value) = env::var("FARGO_CARGO") {
-        let cargo_path = PathBuf::from(&cargo_path_value);
-        if !cargo_path.exists() {
-            bail!(
-                "FARGO_CARGO is set to '{}' but that path does not point to a file.",
-                &cargo_path_value
-            );
-        }
+    if let Some(cargo_path) = get_path_from_env("FARGO_CARGO", false)? {
         Ok(cargo_path)
     } else {
         Ok(buildtools_path(target_options)?.join("rust/bin/cargo"))
@@ -158,14 +170,7 @@ pub fn cargo_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
 }
 
 pub fn rustc_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
-    if let Ok(rustc_path_value) = env::var("FARGO_RUSTC") {
-        let rustc_path = PathBuf::from(&rustc_path_value);
-        if !rustc_path.exists() {
-            bail!(
-                "FARGO_RUSTC is set to '{}' but that path does not point to a file.",
-                &rustc_path_value
-            );
-        }
+    if let Some(rustc_path) = get_path_from_env("FARGO_RUSTC", false)? {
         Ok(rustc_path)
     } else {
         Ok(buildtools_path(target_options)?.join("rust/bin/rustc"))
@@ -199,8 +204,8 @@ pub fn clang_ranlib_path(target_options: &TargetOptions) -> Result<PathBuf, Erro
 }
 
 pub fn fx_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
-    let fuchsia_root = fuchsia_root(target_options)?;
-    Ok(fuchsia_root.join("scripts/fx"))
+    let fuchsia_dir = fuchsia_dir(target_options)?;
+    Ok(fuchsia_dir.join("scripts/fx"))
 }
 
 #[derive(Debug)]
@@ -219,8 +224,8 @@ impl FuchsiaConfig {
             fuchsia_arch: String::from(""),
             zircon_project: String::from(""),
         };
-        let fuchsia_root = fuchsia_root(target_options)?;
-        let config_path = fuchsia_root.join(".config");
+        let fuchsia_dir = fuchsia_dir(target_options)?;
+        let config_path = fuchsia_dir.join(".config");
         let mut config_file = File::open(&config_path)?;
         let mut config_file_contents_str = String::new();
         config_file.read_to_string(&mut config_file_contents_str)?;

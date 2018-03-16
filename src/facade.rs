@@ -1,5 +1,5 @@
 use failure::{Error, ResultExt};
-use sdk::{fuchsia_root, fx_path, TargetOptions};
+use sdk::{fuchsia_dir, fx_path, TargetOptions};
 use std::collections::BTreeMap;
 use std::fs;
 use std::fs::File;
@@ -132,10 +132,10 @@ fn write_cargo_toml_file(crate_path: &Path, crate_name: &str) -> Result<(), Erro
 }
 
 fn format_gn_file(path: &Path, target_options: &TargetOptions) -> Result<(), Error> {
-    let fuchsia_root = fuchsia_root(target_options)?;
+    let fuchsia_dir = fuchsia_dir(target_options)?;
     let fx_path = fx_path(target_options)?;
     Command::new(fx_path)
-        .current_dir(&fuchsia_root)
+        .current_dir(&fuchsia_dir)
         .arg("gn")
         .arg("format")
         .arg(path)
@@ -164,16 +164,16 @@ fn write_build_gn_file(
 }
 
 fn update_workspace_file(
-    crate_path: &Path, crate_name: &str, fuchsia_root: &Path
+    crate_path: &Path, crate_name: &str, fuchsia_dir: &Path
 ) -> Result<(), Error> {
-    let garnet_root = fuchsia_root.join("garnet");
+    let garnet_root = fuchsia_dir.join("garnet");
     let workspace_path = garnet_root.join("Cargo.toml");
     let mut workspace_file = File::open(&workspace_path)?;
     let mut workspace_contents_str = String::new();
     workspace_file.read_to_string(&mut workspace_contents_str)?;
     let mut decoded: Manifest = toml::from_str(&workspace_contents_str)?;
     {
-        let garnet_path = fuchsia_root.join("garnet");
+        let garnet_path = fuchsia_dir.join("garnet");
         let relative_crate_path = crate_path.strip_prefix(&garnet_path)?;
         let ref mut workspace = decoded.workspace.as_mut().unwrap();
         let ref mut members = workspace.members.as_mut().unwrap();
@@ -196,13 +196,13 @@ fn update_workspace_file(
 
 pub fn create_facade(path_to_interface: &str, options: &TargetOptions) -> Result<(), Error> {
     let facade_target = FacadeTarget::parse(path_to_interface)?;
-    let fuchsia_root = fuchsia_root(options)?;
+    let fuchsia_dir = fuchsia_dir(options)?;
 
-    let interface_full_path = fuchsia_root.join(facade_target.fs_path);
-    let interface_relative_path = interface_full_path.strip_prefix(&fuchsia_root)?;
+    let interface_full_path = fuchsia_dir.join(facade_target.fs_path);
+    let interface_relative_path = interface_full_path.strip_prefix(&fuchsia_dir)?;
     let interface_relative = interface_relative_path.to_str().unwrap();
     let crate_name = facade_target.crate_name();
-    let crate_path = fuchsia_root
+    let crate_path = fuchsia_dir
         .join("garnet/public/rust/fidl_crates")
         .join(&crate_name);
 
@@ -215,7 +215,7 @@ pub fn create_facade(path_to_interface: &str, options: &TargetOptions) -> Result
         facade_target.label,
         options,
     )?;
-    update_workspace_file(&crate_path, &crate_name, &fuchsia_root)?;
+    update_workspace_file(&crate_path, &crate_name, &fuchsia_dir)?;
 
     println!("Created or updated facade crate at {:?}.", crate_path);
     Ok(())

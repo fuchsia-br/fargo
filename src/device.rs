@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 use failure::{err_msg, Error, ResultExt};
-use sdk::{fuchsia_root, target_out_dir, TargetOptions};
+use sdk::{fuchsia_dir, target_out_dir, TargetOptions};
 use std::{str, thread, time};
 use std::env;
 use std::path::{Path, PathBuf};
@@ -11,8 +11,8 @@ use std::process::{Command, Stdio};
 use utils::is_mac;
 
 pub fn netaddr(verbose: bool, target_options: &TargetOptions) -> Result<String, Error> {
-    let fuchsia_root = fuchsia_root(target_options)?;
-    let netaddr_binary = fuchsia_root.join("out/build-zircon/tools/netaddr");
+    let fuchsia_dir = fuchsia_dir(target_options)?;
+    let netaddr_binary = fuchsia_dir.join("out/build-zircon/tools/netaddr");
     let mut args = vec!["--fuchsia"];
     if let Some(device_name) = target_options.device_name {
         args.push(device_name);
@@ -43,8 +43,8 @@ pub fn netaddr(verbose: bool, target_options: &TargetOptions) -> Result<String, 
 }
 
 pub fn netls(verbose: bool, target_options: &TargetOptions) -> Result<(), Error> {
-    let fuchsia_root = fuchsia_root(target_options)?;
-    let netls_binary = fuchsia_root.join("out/build-zircon/tools/netls");
+    let fuchsia_dir = fuchsia_dir(target_options)?;
+    let netls_binary = fuchsia_dir.join("out/build-zircon/tools/netls");
     let mut netls_command = Command::new(netls_binary);
     netls_command.arg("--nowait").arg("--timeout=500");
     if verbose {
@@ -230,8 +230,8 @@ pub fn setup_network() -> Result<(), Error> {
 pub fn start_emulator(
     with_graphics: bool, with_networking: bool, target_options: &TargetOptions
 ) -> Result<(), Error> {
-    let fuchsia_root = fuchsia_root(target_options)?;
-    let fx_script = fuchsia_root.join("scripts/fx");
+    let fuchsia_dir = fuchsia_dir(target_options)?;
+    let fx_script = fuchsia_dir.join("scripts/fx");
     if !fx_script.exists() {
         bail!("fx script not found at {:?}", fx_script);
     }
@@ -246,7 +246,7 @@ pub fn start_emulator(
         .args(&args)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
-        .current_dir(&fuchsia_root)
+        .current_dir(&fuchsia_dir)
         .spawn()
         .context("unable to run qemu")?;
 
