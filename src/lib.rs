@@ -27,9 +27,9 @@ use cross::{pkg_config_path, run_configure, run_pkg_config};
 use device::{enable_networking, netaddr, netls, scp_to_device, ssh, start_emulator, stop_emulator};
 use facade::create_facade;
 use failure::{err_msg, Error, ResultExt};
-use sdk::{cargo_out_dir, clang_archiver_path, clang_c_compiler_path, clang_cpp_compiler_path,
-          clang_linker_path, clang_ranlib_path, shared_libraries_path, sysroot_path,
-          target_gen_dir, FuchsiaConfig};
+use sdk::{cargo_out_dir, cargo_path, clang_archiver_path, clang_c_compiler_path,
+          clang_cpp_compiler_path, clang_linker_path, clang_ranlib_path, rustc_path,
+          shared_libraries_path, sysroot_path, target_gen_dir, FuchsiaConfig};
 pub use sdk::TargetOptions;
 use std::fs;
 use std::path::PathBuf;
@@ -313,7 +313,7 @@ pub fn run_cargo(
     }
 
     let pkg_path = pkg_config_path(target_options)?;
-    let mut cmd = Command::new("cargo");
+    let mut cmd = Command::new(cargo_path(target_options)?);
 
     cmd.env("CARGO_TARGET_X86_64_UNKNOWN_FUCHSIA_RUNNER", fargo_command)
         .env(
@@ -327,6 +327,10 @@ pub fn run_cargo(
         .env(
             "CARGO_TARGET_X86_64_UNKNOWN_FUCHSIA_LINKER",
             clang_linker_path(target_options)?.to_str().unwrap(),
+        )
+        .env(
+            "CARGO_TARGET_X86_64_UNKNOWN_FUCHSIA_RUSTC",
+            rustc_path(target_options)?.to_str().unwrap(),
         )
         .env(
             "CC",
@@ -376,7 +380,7 @@ static EXAMPLES: &str = "examples";
 #[doc(hidden)]
 pub fn run() -> Result<(), Error> {
     let matches = App::new("fargo")
-        .version("v0.1.0")
+        .version("v0.2.0")
         .setting(AppSettings::GlobalVersion)
         .about("Fargo is a prototype Fuchsia-specific wrapper around Cargo")
         .arg(

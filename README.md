@@ -1,6 +1,6 @@
 # fargo
 
-    fargo v0.1.0
+    fargo v0.2.0
     Fargo is a prototype Fuchsia-specific wrapper around Cargo
 
     USAGE:
@@ -21,6 +21,7 @@
         build-tests          Build tests for Fuchsia device or emulator
         cargo                Run a cargo command for Fuchsia. Use -- to indicate that all following arguments should be passed to
                              cargo.
+        check                Check binary targeting Fuchsia device or emulator
         configure            Run a configure script for the cross compilation environment
         create-facade        Create an in-tree facade crate for a FIDL interface.
         enable-networking    Enable networking for a running emulator
@@ -104,6 +105,12 @@ freenode is the best bet.
 For fargo itself, that IRC channel can also work of one of the more Rust-aware
 folks happens to be paying attention. More reliable is the
 [rust-fuchsia](https://groups.google.com/a/fuchsia.com/forum/#!aboutgroup/rust-fuchsia) Google group.
+
+## Using different versions of cargo and rustc
+
+By default fargo will use the copies of cargo and rustc provided in `$FUCHSIA_ROOT/buildtools`.
+To change this behavior, set the environmental variables `FARGO_CARGO` and `FARGO_RUSTC` before
+running fargo.
 
 ## Using crates that link with native libraries
 

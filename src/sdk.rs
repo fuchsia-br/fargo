@@ -135,12 +135,45 @@ pub fn shared_libraries_path(options: &TargetOptions) -> Result<PathBuf, Error> 
     Ok(fuchsia_root(&options)?.join("out").join(shared_name))
 }
 
-pub fn toolchain_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+fn buildtools_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
     let platform_name = if is_mac() { "mac-x64" } else { "linux-x64" };
     Ok(fuchsia_root(target_options)?
         .join("buildtools")
-        .join(platform_name)
-        .join("clang"))
+        .join(platform_name))
+}
+
+pub fn cargo_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+    if let Ok(cargo_path_value) = env::var("FARGO_CARGO") {
+        let cargo_path = PathBuf::from(&cargo_path_value);
+        if !cargo_path.exists() {
+            bail!(
+                "FARGO_CARGO is set to '{}' but that path does not point to a file.",
+                &cargo_path_value
+            );
+        }
+        Ok(cargo_path)
+    } else {
+        Ok(buildtools_path(target_options)?.join("rust/bin/cargo"))
+    }
+}
+
+pub fn rustc_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+    if let Ok(rustc_path_value) = env::var("FARGO_RUSTC") {
+        let rustc_path = PathBuf::from(&rustc_path_value);
+        if !rustc_path.exists() {
+            bail!(
+                "FARGO_RUSTC is set to '{}' but that path does not point to a file.",
+                &rustc_path_value
+            );
+        }
+        Ok(rustc_path)
+    } else {
+        Ok(buildtools_path(target_options)?.join("rust/bin/rustc"))
+    }
+}
+
+pub fn toolchain_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+    Ok(buildtools_path(target_options)?.join("clang"))
 }
 
 pub fn clang_linker_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
