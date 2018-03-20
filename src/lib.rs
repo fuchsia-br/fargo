@@ -314,13 +314,15 @@ pub fn run_cargo(
 
     let pkg_path = pkg_config_path(target_options)?;
     let mut cmd = Command::new(cargo_path(target_options)?);
+    let sysroot_as_path = sysroot_path(target_options)?;
+    let sysroot_as_str = sysroot_as_path.to_str().unwrap();
 
     cmd.env("CARGO_TARGET_X86_64_UNKNOWN_FUCHSIA_RUNNER", fargo_command)
         .env(
             "CARGO_TARGET_X86_64_UNKNOWN_FUCHSIA_RUSTFLAGS",
             format!(
                 "-C link-arg=--target=x86_64-unknown-fuchsia -C link-arg=--sysroot={} -Lnative={}",
-                sysroot_path(target_options)?.to_str().unwrap(),
+                sysroot_as_str,
                 shared_libraries_path(target_options)?.to_str().unwrap(),
             ),
         )
@@ -339,6 +341,10 @@ pub fn run_cargo(
         .env(
             "CXX",
             clang_cpp_compiler_path(target_options)?.to_str().unwrap(),
+        )
+        .env(
+            "CFLAGS",
+            format!("--sysroot={}", sysroot_as_str),
         )
         .env("AR", clang_archiver_path(target_options)?.to_str().unwrap())
         .env(
