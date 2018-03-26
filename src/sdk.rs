@@ -118,6 +118,11 @@ pub fn target_gen_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
     Ok(target_out_dir.join("gen"))
 }
 
+pub fn fidl2_target_gen_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
+    let target_out_dir = target_out_dir(options)?;
+    Ok(target_out_dir.join("fidling/gen"))
+}
+
 pub fn cargo_out_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
     let fuchsia_dir = fuchsia_dir(options)?;
     let target_triple = format!("{}-unknown-fuchsia", options.target_cpu_linker);

@@ -26,7 +26,7 @@ use failure::{err_msg, Error, ResultExt};
 pub use sdk::TargetOptions;
 use sdk::{cargo_out_dir, cargo_path, clang_archiver_path, clang_c_compiler_path,
           clang_cpp_compiler_path, clang_linker_path, clang_ranlib_path, rustc_path,
-          shared_libraries_path, sysroot_path, target_gen_dir, FuchsiaConfig};
+          shared_libraries_path, sysroot_path, target_gen_dir, FuchsiaConfig, fidl2_target_gen_dir};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -349,6 +349,7 @@ pub fn run_cargo(
         .env("PKG_CONFIG_PATH", "")
         .env("PKG_CONFIG_LIBDIR", pkg_path)
         .env("FUCHSIA_GEN_ROOT", target_gen_dir(target_options)?)
+        .env("FIDL_GEN_ROOT", fidl2_target_gen_dir(target_options)?)
         .args(args)
         .args(target_args);
 
