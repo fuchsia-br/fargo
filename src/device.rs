@@ -3,11 +3,11 @@
 // found in the LICENSE file.
 
 use failure::{err_msg, Error, ResultExt};
-use sdk::{fuchsia_dir, target_out_dir, TargetOptions};
-use std::{str, thread, time};
+use sdk::{fuchsia_dir, fx_path, target_out_dir, TargetOptions};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::{str, thread, time};
 use utils::is_mac;
 
 pub fn netaddr(verbose: bool, target_options: &TargetOptions) -> Result<String, Error> {
@@ -231,7 +231,7 @@ pub fn start_emulator(
     with_graphics: bool, with_networking: bool, target_options: &TargetOptions
 ) -> Result<(), Error> {
     let fuchsia_dir = fuchsia_dir(target_options)?;
-    let fx_script = fuchsia_dir.join("scripts/fx");
+    let fx_script = fx_path(target_options)?;
     if !fx_script.exists() {
         bail!("fx script not found at {:?}", fx_script);
     }

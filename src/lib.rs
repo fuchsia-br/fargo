@@ -11,26 +11,22 @@
 extern crate clap;
 #[macro_use]
 extern crate failure;
-#[macro_use]
-extern crate serde_derive;
 extern crate toml;
 extern crate uname;
 
 mod cross;
 mod device;
-mod facade;
 mod sdk;
 mod utils;
 
 use clap::{App, AppSettings, Arg, SubCommand};
 use cross::{pkg_config_path, run_configure, run_pkg_config};
 use device::{enable_networking, netaddr, netls, scp_to_device, ssh, start_emulator, stop_emulator};
-use facade::create_facade;
 use failure::{err_msg, Error, ResultExt};
+pub use sdk::TargetOptions;
 use sdk::{cargo_out_dir, cargo_path, clang_archiver_path, clang_c_compiler_path,
           clang_cpp_compiler_path, clang_linker_path, clang_ranlib_path, rustc_path,
           shared_libraries_path, sysroot_path, target_gen_dir, FuchsiaConfig};
-pub use sdk::TargetOptions;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -342,10 +338,7 @@ pub fn run_cargo(
             "CXX",
             clang_cpp_compiler_path(target_options)?.to_str().unwrap(),
         )
-        .env(
-            "CFLAGS",
-            format!("--sysroot={}", sysroot_as_str),
-        )
+        .env("CFLAGS", format!("--sysroot={}", sysroot_as_str))
         .env("AR", clang_archiver_path(target_options)?.to_str().unwrap())
         .env(
             "RANLIB",
@@ -370,11 +363,6 @@ pub fn run_cargo(
 
     Ok(())
 }
-
-static CREATE_FACADE: &str = "create-facade";
-static FIDL_PARAM: &str = "fidl_interface_path";
-static FIDL_PARAM_HELP: &str =
-    "gn path and label (i.e. //garnet/public/lib/app/fidl:fidl) for the new facade";
 
 static SET_ROOT_VIEW: &str = "set-root-view";
 
@@ -596,16 +584,6 @@ pub fn run() -> Result<(), Error> {
                         .help("Don't pass --host to configure"),
                 ),
         )
-        .subcommand(
-            SubCommand::with_name(CREATE_FACADE)
-                .about("Create an in-tree facade crate for a FIDL interface.")
-                .arg(
-                    Arg::with_name(FIDL_PARAM)
-                        .help(FIDL_PARAM_HELP)
-                        .index(1)
-                        .required(true),
-                ),
-        )
         .get_matches();
 
     let verbose = matches.is_present("verbose");
@@ -822,13 +800,6 @@ pub fn run() -> Result<(), Error> {
             &target_options,
         )?;
         return Ok(());
-    }
-
-    if let Some(create_facade_matches) = matches.subcommand_matches(CREATE_FACADE) {
-        let create_facade_param = create_facade_matches
-            .value_of(FIDL_PARAM)
-            .unwrap_or_else(|| "");
-        create_facade(&create_facade_param, &target_options).context("create facade failed")?;
     }
 
     Ok(())
