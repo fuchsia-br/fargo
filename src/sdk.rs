@@ -138,15 +138,9 @@ pub fn strip_tool_path(target_options: &TargetOptions) -> Result<PathBuf, Error>
 }
 
 pub fn sysroot_path(options: &TargetOptions) -> Result<PathBuf, Error> {
-    let zircon_name = if options.target_cpu == "x64" {
-        "build-x64"
-    } else {
-        "build-arm64"
-    };
-    Ok(fuchsia_dir(&options)?
-        .join("out")
-        .join("build-zircon")
-        .join(zircon_name)
+    Ok(target_out_dir(&options)?
+        .join("sdks")
+        .join("zircon_sysroot")
         .join("sysroot"))
 }
 
