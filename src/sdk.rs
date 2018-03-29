@@ -156,7 +156,7 @@ pub fn shared_libraries_path(options: &TargetOptions) -> Result<PathBuf, Error> 
     } else {
         "arm64-shared"
     };
-    Ok(fuchsia_dir(&options)?.join("out").join(shared_name))
+    Ok(target_out_dir(&options)?.join(shared_name))
 }
 
 fn buildtools_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
