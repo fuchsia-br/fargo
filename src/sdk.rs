@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+use X64;
 use failure::Error;
 use std::env;
 use std::fs::File;
@@ -29,7 +30,7 @@ impl<'a, 'b> TargetOptions<'a, 'b> {
     /// ```
     /// use fargo::TargetOptions;
     ///
-    /// let target_options = TargetOptions::new(true, Some("ivy-donut-grew-stoop"));
+    /// let target_options = TargetOptions::new(true, "x64", Some("ivy-donut-grew-stoop"));
     /// ```
 
     pub fn new(
@@ -147,7 +148,7 @@ pub fn sysroot_path(options: &TargetOptions) -> Result<PathBuf, Error> {
 }
 
 pub fn shared_libraries_path(options: &TargetOptions) -> Result<PathBuf, Error> {
-    let shared_name = if options.target_cpu == "x64" {
+    let shared_name = if options.target_cpu == X64 {
         "x64-shared"
     } else {
         "arm64-shared"

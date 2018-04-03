@@ -13,19 +13,25 @@
         -v, --verbose     Print verbose output while performing commands
 
     OPTIONS:
-        -N, --device-name <device-name>    Name of device to target, needed if there are multiple devices visible on the network
+        -N, --device-name <device-name>
+                Name of device to target, needed if there are multiple devices visible on
+                the network
+        -T, --target-cpu <target-cpu>
+                Architecture of target device [default: x64]  [values: x64, arm64]
+
 
     SUBCOMMANDS:
         autotest             Auto build and test in Fuchsia device or emulator
         build                Build binary targeting Fuchsia device or emulator
         build-tests          Build tests for Fuchsia device or emulator
-        cargo                Run a cargo command for Fuchsia. Use -- to indicate that all following arguments should be passed to
-                             cargo.
+        cargo                Run a cargo command for Fuchsia. Use -- to indicate that
+                             all following arguments should be passed to cargo.
         check                Check binary targeting Fuchsia device or emulator
-        configure            Run a configure script for the cross compilation environment
-        create-facade        Create an in-tree facade crate for a FIDL interface.
+        configure            Run a configure script for the cross compilation
+                             environment
         enable-networking    Enable networking for a running emulator
-        help                 Prints this message or the help of the given subcommand(s)
+        help                 Prints this message or the help of the given
+                             subcommand(s)
         list-devices         List visible Fuchsia devices
         load-driver          Build driver and load it on Fuchsia device or emulator.
         pkg-config           Run pkg-config for the cross compilation environment
@@ -96,6 +102,14 @@ rust project.
 
 Additionally, if you are using qemu you need to enable networking, otherwise fargo won't be able to
 copy the binary onto then fuchsia machine to run the tests.
+
+### Escaping parameters
+
+Sometimes you want to pass parameters through fargo and cargo and on to something like rustc. To make this easier fargo will convert a "++" parameter to "--" when invoking cargo. For example, the following command:
+
+    fargo cargo rustc -- ++ --emit=llvm-ir
+
+will get cargo to cause rustc to emil llvm ir files.
 
 ## Getting help
 

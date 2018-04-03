@@ -149,7 +149,7 @@ fn run_tests(
     verbose: bool, release: bool, no_run: bool, target_options: &TargetOptions, test_target: &str,
     params: &[&str], target_params: Option<&str>,
 ) -> Result<(), Error> {
-    let mut args = vec!["test"];
+    let mut args = vec![];
 
     if !test_target.is_empty() {
         args.push("--test");
@@ -167,16 +167,30 @@ fn run_tests(
     if target_params.is_some() {
         let formatted_target_params = format!("--args={}", target_params.unwrap());
         run_cargo(
-            verbose,
-            release,
-            false,
+            RunCargoOptions {
+                verbose,
+                release,
+                set_root_view: false,
+            },
+            "test",
             &args,
             target_options,
             None,
             Some(&formatted_target_params),
         )?;
     } else {
-        run_cargo(verbose, release, false, &args, target_options, None, None)?;
+        run_cargo(
+            RunCargoOptions {
+                verbose,
+                release,
+                set_root_view: false,
+            },
+            "test",
+            &args,
+            target_options,
+            None,
+            None,
+        )?;
     }
 
     Ok(())
@@ -185,39 +199,49 @@ fn run_tests(
 fn build_binary(
     verbose: bool, release: bool, target_options: &TargetOptions, params: &[&str]
 ) -> Result<(), Error> {
-    let mut args = vec!["build"];
-    for param in params {
-        args.push(param);
-    }
-
-    run_cargo(verbose, release, false, &args, target_options, None, None)
+    run_cargo(
+        RunCargoOptions {
+            verbose,
+            release,
+            set_root_view: false,
+        },
+        "build",
+        params,
+        target_options,
+        None,
+        None,
+    )
 }
 
 fn check_binary(
     verbose: bool, release: bool, target_options: &TargetOptions, params: &[&str]
 ) -> Result<(), Error> {
-    let mut args = vec!["check"];
-    for param in params {
-        args.push(param);
-    }
-
-    run_cargo(verbose, release, false, &args, target_options, None, None)
+    run_cargo(
+        RunCargoOptions {
+            verbose,
+            release,
+            set_root_view: false,
+        },
+        "check",
+        params,
+        target_options,
+        None,
+        None,
+    )
 }
 
 fn run_binary(
     verbose: bool, release: bool, set_root_view: bool, target_options: &TargetOptions,
     params: &[&str],
 ) -> Result<(), Error> {
-    let mut args = vec!["run"];
-    for param in params {
-        args.push(param);
-    }
-
     run_cargo(
-        verbose,
-        release,
-        set_root_view,
-        &args,
+        RunCargoOptions {
+            verbose,
+            release,
+            set_root_view,
+        },
+        "run",
+        params,
         target_options,
         None,
         None,
@@ -226,8 +250,19 @@ fn run_binary(
 }
 
 fn load_driver(verbose: bool, release: bool, target_options: &TargetOptions) -> Result<(), Error> {
-    let args = vec!["build"];
-    run_cargo(verbose, release, false, &args, target_options, None, None)?;
+    let args = vec![];
+    run_cargo(
+        RunCargoOptions {
+            verbose,
+            release,
+            set_root_view: false,
+        },
+        "build",
+        &args,
+        target_options,
+        None,
+        None,
+    )?;
     let cwd = std::env::current_dir()?;
     let package = cwd.file_name()
         .ok_or(err_msg("No current directory"))?
@@ -243,6 +278,12 @@ fn load_driver(verbose: bool, release: bool, target_options: &TargetOptions) -> 
     Ok(())
 }
 
+pub struct RunCargoOptions {
+    pub verbose: bool,
+    pub release: bool,
+    pub set_root_view: bool,
+}
+
 /// Runs the cargo tool configured to target Fuchsia. When used as a library,
 /// the runner options must contain the path to fargo or some other program
 /// that implements the `run-on-target` subcommand in a way compatible with
@@ -251,25 +292,55 @@ fn load_driver(verbose: bool, release: bool, target_options: &TargetOptions) -> 
 /// # Examples
 ///
 /// ```
-/// use fargo::{run_cargo, TargetOptions};
+/// use fargo::{run_cargo, RunCargoOptions, TargetOptions};
 ///
-/// let target_options = TargetOptions::new(true, None);
-/// run_cargo(false, true, false, &["--help"], &target_options, None, None);
+/// let target_options = TargetOptions::new(true, "x64", None);
+/// run_cargo(
+///     RunCargoOptions {
+///         verbose: false,
+///         release: true,
+///         set_root_view: false,
+///     },
+///     "help",
+///     &[],
+///     &target_options,
+///     None,
+///     None,
+/// );
 /// ```
 pub fn run_cargo(
-    verbose: bool, release: bool, set_root_view: bool, args: &[&str],
-    target_options: &TargetOptions, runner: Option<PathBuf>, additional_target_args: Option<&str>,
+    options: RunCargoOptions, subcommand: &str, args: &[&str], target_options: &TargetOptions,
+    runner: Option<PathBuf>, additional_target_args: Option<&str>,
 ) -> Result<(), Error> {
-    let set_root_view_arg = format!("--{}", SET_ROOT_VIEW);
-    let mut target_args = vec!["--target", "x86_64-unknown-fuchsia"];
+    if options.verbose {
+        println!("target_options = {:?}", target_options);
+    }
 
-    if release {
+    let set_root_view_arg = format!("--{}", SET_ROOT_VIEW);
+
+    let triple_cpu = if target_options.target_cpu == X64 {
+        "x86_64"
+    } else {
+        "aarch64"
+    };
+    let target_triple = format!("{}-unknown-fuchsia", triple_cpu);
+    let mut target_args = vec!["--target", &target_triple];
+
+    if options.release {
         target_args.push("--release");
     }
 
-    if verbose {
+    if options.verbose {
+        println!(
+            "target_options.target_cpu = {:?}",
+            target_options.target_cpu
+        );
+        println!("triple_cpu = {:?}", triple_cpu);
+        println!("target_triple = {:?}", target_triple);
         println!("target_args = {:?}", target_args);
     }
+
+    let target_triple_uc = format!("{}_unknown_fuchsia", triple_cpu).to_uppercase();
 
     let fargo_path = if runner.is_some() {
         runner.unwrap()
@@ -283,7 +354,7 @@ pub fn run_cargo(
             .ok_or_else(|| err_msg("unable to convert path to utf8 encoding"))?,
     ];
 
-    if verbose {
+    if options.verbose {
         runner_args.push("-v");
     }
 
@@ -294,7 +365,7 @@ pub fn run_cargo(
 
     runner_args.push("run-on-target");
 
-    if set_root_view {
+    if options.set_root_view {
         runner_args.push(&set_root_view_arg);
     }
 
@@ -304,7 +375,7 @@ pub fn run_cargo(
 
     let fargo_command = runner_args.join(" ");
 
-    if verbose {
+    if options.verbose {
         println!("fargo_command: {:?}", fargo_command);
     }
 
@@ -313,21 +384,38 @@ pub fn run_cargo(
     let sysroot_as_path = sysroot_path(target_options)?;
     let sysroot_as_str = sysroot_as_path.to_str().unwrap();
 
-    cmd.env("CARGO_TARGET_X86_64_UNKNOWN_FUCHSIA_RUNNER", fargo_command)
+    let args: Vec<&str> = args.iter()
+        .map(|a| if *a == "++" { "--" } else { *a })
+        .collect();
+
+    let runner_env_name = format!("CARGO_TARGET_{}_RUNNER", target_triple_uc);
+    let rustflags_env_name = format!("CARGO_TARGET_{}_RUSTFLAGS", target_triple_uc);
+    let linker_env_name = format!("CARGO_TARGET_{}_LINKER", target_triple_uc);
+    let rustc_env_name = format!("CARGO_TARGET_{}_RUSTC", target_triple_uc);
+
+    if options.verbose {
+        println!("runner_env_name: {:?}", runner_env_name);
+        println!("rustflags_env_name: {:?}", rustflags_env_name);
+        println!("linker_env_name: {:?}", linker_env_name);
+        println!("rustc_env_name: {:?}", rustc_env_name);
+    }
+
+    cmd.env(runner_env_name, fargo_command)
         .env(
-            "CARGO_TARGET_X86_64_UNKNOWN_FUCHSIA_RUSTFLAGS",
+            rustflags_env_name,
             format!(
-                "-C link-arg=--target=x86_64-unknown-fuchsia -C link-arg=--sysroot={} -Lnative={}",
+                "-C link-arg=--target={}-unknown-fuchsia -C link-arg=--sysroot={} -Lnative={}",
+                triple_cpu,
                 sysroot_as_str,
                 shared_libraries_path(target_options)?.to_str().unwrap(),
             ),
         )
         .env(
-            "CARGO_TARGET_X86_64_UNKNOWN_FUCHSIA_LINKER",
+            linker_env_name,
             clang_linker_path(target_options)?.to_str().unwrap(),
         )
         .env(
-            "CARGO_TARGET_X86_64_UNKNOWN_FUCHSIA_RUSTC",
+            rustc_env_name,
             rustc_path(target_options)?.to_str().unwrap(),
         )
         .env(
@@ -350,10 +438,11 @@ pub fn run_cargo(
         .env("PKG_CONFIG_LIBDIR", pkg_path)
         .env("FUCHSIA_GEN_ROOT", target_gen_dir(target_options)?)
         .env("FIDL_GEN_ROOT", fidl2_target_gen_dir(target_options)?)
-        .args(args)
-        .args(target_args);
+        .arg(subcommand)
+        .args(target_args)
+        .args(args);
 
-    if verbose {
+    if options.verbose {
         println!("cargo cmd: {:?}", cmd);
     }
 
@@ -375,6 +464,8 @@ static EXAMPLES: &str = "examples";
 static TARGET_CPU: &str = "target-cpu";
 static X64: &str = "x64";
 static ARM64: &str = "arm64";
+
+static SUBCOMMAND: &str = "subcommand";
 
 #[doc(hidden)]
 pub fn run() -> Result<(), Error> {
@@ -560,7 +651,8 @@ pub fn run() -> Result<(), Error> {
                     "Run a cargo command for Fuchsia. Use -- to indicate that all following \
                      arguments should be passed to cargo.",
                 )
-                .arg(Arg::with_name("cargo_params").index(1).multiple(true)),
+                .arg(Arg::with_name(SUBCOMMAND).required(true))
+                .arg(Arg::with_name("cargo_params").index(2).multiple(true)),
         )
         .subcommand(
             SubCommand::with_name("run-on-target")
@@ -759,14 +851,18 @@ pub fn run() -> Result<(), Error> {
     }
 
     if let Some(cargo_matches) = matches.subcommand_matches("cargo") {
+        let subcommand = cargo_matches.value_of(SUBCOMMAND).unwrap();
         let cargo_params = cargo_matches
             .values_of("cargo_params")
             .map(|x| x.collect())
             .unwrap_or_else(|| vec![]);
         return run_cargo(
-            verbose,
-            false,
-            false,
+            RunCargoOptions {
+                verbose,
+                release: false,
+                set_root_view: false,
+            },
+            subcommand,
             &cargo_params,
             &target_options,
             None,
