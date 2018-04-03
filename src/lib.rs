@@ -372,6 +372,10 @@ static RELEASE: &str = "release";
 static EXAMPLE: &str = "example";
 static EXAMPLES: &str = "examples";
 
+static TARGET_CPU: &str = "target-cpu";
+static X64: &str = "x64";
+static ARM64: &str = "arm64";
+
 #[doc(hidden)]
 pub fn run() -> Result<(), Error> {
     let matches = App::new("fargo")
@@ -388,6 +392,15 @@ pub fn run() -> Result<(), Error> {
             Arg::with_name("debug-os")
                 .long("debug-os")
                 .help("Use debug user.bootfs and ssh keys"),
+        )
+        .arg(
+            Arg::with_name(TARGET_CPU)
+                .long(TARGET_CPU)
+                .short("T")
+                .value_name(TARGET_CPU)
+                .default_value(X64)
+                .possible_values(&[X64, ARM64])
+                .help("Architecture of target device"),
         )
         .arg(
             Arg::with_name("device-name")
@@ -590,6 +603,7 @@ pub fn run() -> Result<(), Error> {
     let verbose = matches.is_present("verbose");
     let target_options = TargetOptions::new(
         !matches.is_present("debug-os"),
+        matches.value_of(TARGET_CPU).unwrap(),
         matches.value_of("device-name"),
     );
 

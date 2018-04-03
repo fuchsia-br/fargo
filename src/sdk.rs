@@ -14,14 +14,14 @@ use utils::is_mac;
 /// the moment there is no way to set anything but the `release_os` field, but this
 /// will change when fargo starts supporting ARM targets.
 #[derive(Debug)]
-pub struct TargetOptions<'a> {
+pub struct TargetOptions<'a, 'b> {
     pub release_os: bool,
     pub target_cpu: &'a str,
     pub target_cpu_linker: &'a str,
-    pub device_name: Option<&'a str>,
+    pub device_name: Option<&'b str>,
 }
 
-impl<'a> TargetOptions<'a> {
+impl<'a, 'b> TargetOptions<'a, 'b> {
     /// Constructs a new `TargetOptions`.
     ///
     /// # Examples
@@ -32,11 +32,13 @@ impl<'a> TargetOptions<'a> {
     /// let target_options = TargetOptions::new(true, Some("ivy-donut-grew-stoop"));
     /// ```
 
-    pub fn new(release_os: bool, device_name: Option<&'a str>) -> TargetOptions {
+    pub fn new(
+        release_os: bool, target_cpu: &'a str, device_name: Option<&'b str>
+    ) -> TargetOptions<'a, 'b> {
         TargetOptions {
             release_os: release_os,
-            target_cpu: "x64",
-            target_cpu_linker: "x64",
+            target_cpu: target_cpu,
+            target_cpu_linker: target_cpu,
             device_name: device_name,
         }
     }
