@@ -46,23 +46,24 @@ The `fargo-test` directory contains something one can use to test-drive.
 
 ## Getting started
 
-Since at the moment fargo requires the FUCHSIA\_ROOT environmental variable be
-set to the path to a Fuchsia **release** build, the first step is to build
-Fuchsia.
+Since at the moment fargo requires the FUCHSIA\_DIR environmental variable be
+set to the path to a Fuchsia source tree containing a **release** build,
+the first step is to build Fuchsia.
 
 The [Fuchsia Getting
 Started](https://fuchsia.googlesource.com/docs/+/HEAD/getting_started.md)
 instruction are what you need. Since a release build is what fargo expects to
-find you'll want to pass --release to fx/set. The Rust components that fargo
-needs to cross compile are part of garnet, so you must be using the
-garnet layer or higher.
+find you'll want to pass --args "is_debug=false" to fx/set. You'll also need to
+specify `out/release-x64` or `out/debug-x64` as the out directory when using
+`fx set`. The Rust components that fargo needs to cross compile are part of garnet,
+so you must be using the garnet layer or higher.
 
 The author most often uses the following steps to update and build Fuchsia in
 preparation for using fargo
 
     ./scripts/fx set-layer garnet
     .jiri_root/bin/jiri update
-    ./scripts/fx set x64 --release
+    ./scripts/fx set x64 out/release-x64 --args "is_debug=false"
     ./scripts/fx build-zircon
     ./scripts/fx build
 
@@ -122,7 +123,7 @@ folks happens to be paying attention. More reliable is the
 
 ## Using different versions of cargo and rustc
 
-By default fargo will use the copies of cargo and rustc provided in `$FUCHSIA_ROOT/buildtools`.
+By default fargo will use the copies of cargo and rustc provided in `$FUCHSIA_DIR/buildtools`.
 To change this behavior, set the environmental variables `FARGO_CARGO` and `FARGO_RUSTC` before
 running fargo.
 
