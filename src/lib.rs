@@ -398,6 +398,8 @@ pub fn run_cargo(
         println!("rustflags_env_name: {:?}", rustflags_env_name);
         println!("linker_env_name: {:?}", linker_env_name);
         println!("rustc_env_name: {:?}", rustc_env_name);
+        println!("rustc_path: {:?}", rustc_path(target_options)?.to_str().unwrap());
+        println!("cargo_path: {:?}", cargo_path(target_options)?.to_str().unwrap());
     }
 
     cmd.env(runner_env_name, fargo_command)
