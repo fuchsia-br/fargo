@@ -356,6 +356,7 @@ pub fn run_cargo(
 
     if options.verbose {
         runner_args.push("-v");
+        target_args.push("-v");
     }
 
     if let Some(device_name) = target_options.device_name {
@@ -391,13 +392,11 @@ pub fn run_cargo(
     let runner_env_name = format!("CARGO_TARGET_{}_RUNNER", target_triple_uc);
     let rustflags_env_name = format!("CARGO_TARGET_{}_RUSTFLAGS", target_triple_uc);
     let linker_env_name = format!("CARGO_TARGET_{}_LINKER", target_triple_uc);
-    let rustc_env_name = format!("CARGO_TARGET_{}_RUSTC", target_triple_uc);
 
     if options.verbose {
         println!("runner_env_name: {:?}", runner_env_name);
         println!("rustflags_env_name: {:?}", rustflags_env_name);
         println!("linker_env_name: {:?}", linker_env_name);
-        println!("rustc_env_name: {:?}", rustc_env_name);
         println!("rustc_path: {:?}", rustc_path(target_options)?.to_str().unwrap());
         println!("cargo_path: {:?}", cargo_path(target_options)?.to_str().unwrap());
     }
@@ -417,7 +416,7 @@ pub fn run_cargo(
             clang_linker_path(target_options)?.to_str().unwrap(),
         )
         .env(
-            rustc_env_name,
+            "RUSTC",
             rustc_path(target_options)?.to_str().unwrap(),
         )
         .env(
