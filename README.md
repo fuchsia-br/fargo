@@ -154,6 +154,12 @@ based packages will properly cross-compile.
 See `scripts/build_cairo_support.sh` for an example of how to use these
 functions to build native support.
 
+fargo sets the following environmental variables before invoking configure:
+
+    CC, CXX, RANLIB, LD, AR, CFLAGS, CXXFLAGS, CPPFLAGS
+    LDFLAGS, PKG_CONFIG_PATH, PKG_CONFIG_LIBDIR,
+    PKG_CONFIG_ALL_STATIC
+
 ## Fargo roadmap
 
 The goal is to transition fargo to using something like an SDK instead.
