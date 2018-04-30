@@ -2,13 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use X64;
 use failure::Error;
 use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 use utils::is_mac;
+use X64;
 
 /// The `TargetOptions` struct bundles together a number of parameters specific to
 /// the Fuchsia target that need to be passed through various internal functions. For
@@ -34,7 +34,7 @@ impl<'a, 'b> TargetOptions<'a, 'b> {
     /// ```
 
     pub fn new(
-        release_os: bool, target_cpu: &'a str, device_name: Option<&'b str>
+        release_os: bool, target_cpu: &'a str, device_name: Option<&'b str>,
     ) -> TargetOptions<'a, 'b> {
         TargetOptions {
             release_os: release_os,
@@ -96,7 +96,7 @@ pub fn fuchsia_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
 }
 
 pub fn possible_target_out_dir(
-    fuchsia_dir: &PathBuf, options: &TargetOptions
+    fuchsia_dir: &PathBuf, options: &TargetOptions,
 ) -> Result<PathBuf, Error> {
     let out_dir_name_prefix = if options.release_os {
         "release"

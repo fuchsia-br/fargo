@@ -7,10 +7,12 @@
         fargo [FLAGS] [OPTIONS] [SUBCOMMAND]
 
     FLAGS:
-            --debug-os    Use debug user.bootfs and ssh keys
-        -h, --help        Prints help information
-        -V, --version     Prints version information
-        -v, --verbose     Print verbose output while performing commands
+            --debug-os             Use debug user.bootfs and ssh keys
+            --disable-cross-env    Disable the setting of CC, AR and such environmental
+                                   variables.
+        -h, --help                 Prints help information
+        -V, --version              Prints version information
+        -v, --verbose              Print verbose output while performing commands
 
     OPTIONS:
         -N, --device-name <device-name>
@@ -30,8 +32,7 @@
         configure            Run a configure script for the cross compilation
                              environment
         enable-networking    Enable networking for a running emulator
-        help                 Prints this message or the help of the given
-                             subcommand(s)
+        help                 Prints this message or the help of the given subcommand(s)
         list-devices         List visible Fuchsia devices
         load-driver          Build driver and load it on Fuchsia device or emulator.
         pkg-config           Run pkg-config for the cross compilation environment
@@ -159,6 +160,10 @@ fargo sets the following environmental variables before invoking configure:
     CC, CXX, RANLIB, LD, AR, CFLAGS, CXXFLAGS, CPPFLAGS
     LDFLAGS, PKG_CONFIG_PATH, PKG_CONFIG_LIBDIR,
     PKG_CONFIG_ALL_STATIC
+
+The `--disable-cross-env` option will prevent these environmental variables from
+being set when invoking cargo. This is useful when the components being built
+by C or C++ are intended for the host, not the target.
 
 ## Fargo roadmap
 

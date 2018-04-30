@@ -228,7 +228,7 @@ pub fn setup_network() -> Result<(), Error> {
 }
 
 pub fn start_emulator(
-    with_graphics: bool, with_networking: bool, target_options: &TargetOptions
+    with_graphics: bool, with_networking: bool, target_options: &TargetOptions,
 ) -> Result<(), Error> {
     let fuchsia_dir = fuchsia_dir(target_options)?;
     let fx_script = fx_path(target_options)?;

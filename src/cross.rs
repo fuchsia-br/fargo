@@ -23,7 +23,7 @@ pub fn pkg_config_path(target_options: &TargetOptions) -> Result<PathBuf, Error>
 }
 
 pub fn run_pkg_config(
-    verbose: bool, args: &[&str], target_options: &TargetOptions
+    verbose: bool, args: &[&str], target_options: &TargetOptions,
 ) -> Result<i32, Error> {
     let mut cmd = Command::new("pkg-config");
 
@@ -45,7 +45,7 @@ pub fn run_pkg_config(
 }
 
 pub fn run_configure(
-    verbose: bool, use_host: bool, args: &[&str], target_options: &TargetOptions
+    verbose: bool, use_host: bool, args: &[&str], target_options: &TargetOptions,
 ) -> Result<bool, Error> {
     let cwd = fs::canonicalize(env::current_dir()?)
         .context("run_configure: canonicalize working directory")?;
