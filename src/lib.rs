@@ -432,15 +432,22 @@ pub fn run_cargo(
         .args(args);
 
     if !options.disable_cross {
+        let cc_env_name = format!("CC_{}", target_triple_uc);
+        let cxx_env_name = format!("CXX_{}", target_triple_uc);
+        let cflags_env_name = format!("CFLAGS_{}", target_triple_uc);
+        let ar_env_name = format!("AR_{}", target_triple_uc);
         cmd.env(
-            "CC",
+            cc_env_name,
             clang_c_compiler_path(target_options)?.to_str().unwrap(),
         ).env(
-                "CXX",
+                cxx_env_name,
                 clang_cpp_compiler_path(target_options)?.to_str().unwrap(),
             )
-            .env("CFLAGS", format!("--sysroot={}", sysroot_as_str))
-            .env("AR", clang_archiver_path(target_options)?.to_str().unwrap())
+            .env(cflags_env_name, format!("--sysroot={}", sysroot_as_str))
+            .env(
+                ar_env_name,
+                clang_archiver_path(target_options)?.to_str().unwrap(),
+            )
             .env(
                 "RANLIB",
                 clang_ranlib_path(target_options)?.to_str().unwrap(),
@@ -522,11 +529,7 @@ pub fn run() -> Result<(), Error> {
         .subcommand(
             SubCommand::with_name("autotest")
                 .about("Auto build and test in Fuchsia device or emulator")
-                .arg(
-                    Arg::with_name(RELEASE)
-                        .long(RELEASE)
-                        .help("Build release"),
-                ),
+                .arg(Arg::with_name(RELEASE).long(RELEASE).help("Build release")),
         )
         .subcommand(
             SubCommand::with_name("build-tests")
@@ -537,20 +540,12 @@ pub fn run() -> Result<(), Error> {
                         .value_name("test")
                         .help("Test only the specified test target"),
                 )
-                .arg(
-                    Arg::with_name(RELEASE)
-                        .long(RELEASE)
-                        .help("Build release"),
-                ),
+                .arg(Arg::with_name(RELEASE).long(RELEASE).help("Build release")),
         )
         .subcommand(
             SubCommand::with_name("test")
                 .about("Run unit tests on Fuchsia device or emulator")
-                .arg(
-                    Arg::with_name(RELEASE)
-                        .long(RELEASE)
-                        .help("Build release"),
-                )
+                .arg(Arg::with_name(RELEASE).long(RELEASE).help("Build release"))
                 .arg(
                     Arg::with_name("test")
                         .long("test")
@@ -568,11 +563,7 @@ pub fn run() -> Result<(), Error> {
         .subcommand(
             SubCommand::with_name("build")
                 .about("Build binary targeting Fuchsia device or emulator")
-                .arg(
-                    Arg::with_name(RELEASE)
-                        .long(RELEASE)
-                        .help("Build release"),
-                )
+                .arg(Arg::with_name(RELEASE).long(RELEASE).help("Build release"))
                 .arg(
                     Arg::with_name("example")
                         .long("example")
@@ -604,11 +595,7 @@ pub fn run() -> Result<(), Error> {
         .subcommand(
             SubCommand::with_name("run")
                 .about("Run binary on Fuchsia device or emulator")
-                .arg(
-                    Arg::with_name(RELEASE)
-                        .long(RELEASE)
-                        .help("Build release"),
-                )
+                .arg(Arg::with_name(RELEASE).long(RELEASE).help("Build release"))
                 .arg(
                     Arg::with_name(SET_ROOT_VIEW)
                         .long(SET_ROOT_VIEW)
@@ -624,11 +611,7 @@ pub fn run() -> Result<(), Error> {
         .subcommand(
             SubCommand::with_name("load-driver")
                 .about("Build driver and load it on Fuchsia device or emulator.")
-                .arg(
-                    Arg::with_name(RELEASE)
-                        .long(RELEASE)
-                        .help("Build release"),
-                ),
+                .arg(Arg::with_name(RELEASE).long(RELEASE).help("Build release")),
         )
         .subcommand(SubCommand::with_name("list-devices").about("List visible Fuchsia devices"))
         .subcommand(
