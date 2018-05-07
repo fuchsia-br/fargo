@@ -485,6 +485,9 @@ static SUBCOMMAND: &str = "subcommand";
 
 static DISABLE_CROSS_ENV: &str = "disable-cross-env";
 
+static NO_NET: &str = "no-net";
+static FX_RUN_PARAMS: &str = "fx-run-params";
+
 #[doc(hidden)]
 pub fn run() -> Result<(), Error> {
     let matches = App::new("fargo")
@@ -622,8 +625,12 @@ pub fn run() -> Result<(), Error> {
                         .short("g")
                         .help("Start a simulator with graphics enabled"),
                 )
-                .arg(Arg::with_name("no_net"))
-                .help("Don't set up networking."),
+                .arg(
+                    Arg::with_name(NO_NET)
+                        .long(NO_NET)
+                        .help("Don't set up networking."),
+                )
+                .arg(Arg::with_name(FX_RUN_PARAMS).index(1).multiple(true)),
         )
         .subcommand(SubCommand::with_name("stop").about("Stop all Fuchsia emulators"))
         .subcommand(
@@ -638,8 +645,12 @@ pub fn run() -> Result<(), Error> {
                         .short("g")
                         .help("Start a simulator with graphics enabled"),
                 )
-                .arg(Arg::with_name("no_net"))
-                .help("Don't set up networking."),
+                .arg(
+                    Arg::with_name(NO_NET)
+                        .long(NO_NET)
+                        .help("Don't set up networking."),
+                )
+                .arg(Arg::with_name(FX_RUN_PARAMS).index(1).multiple(true)),
         )
         .subcommand(
             SubCommand::with_name("ssh").about("Open a shell on Fuchsia device or emulator"),
@@ -823,9 +834,16 @@ pub fn run() -> Result<(), Error> {
             );
         }
 
+        let fx_run_params = start_matches
+            .values_of(FX_RUN_PARAMS)
+            .map(|x| x.collect())
+            .unwrap_or_else(|| vec![]);
+
         return start_emulator(
+            verbose,
             start_matches.is_present("graphics"),
-            !start_matches.is_present("no_net"),
+            !start_matches.is_present(NO_NET),
+            &fx_run_params,
             &target_options,
         );
     }
@@ -841,9 +859,16 @@ pub fn run() -> Result<(), Error> {
     if let Some(restart_matches) = matches.subcommand_matches("restart") {
         stop_emulator()?;
 
+        let fx_run_params = restart_matches
+            .values_of(FX_RUN_PARAMS)
+            .map(|x| x.collect())
+            .unwrap_or_else(|| vec![]);
+
         return start_emulator(
+            verbose,
             restart_matches.is_present("graphics"),
-            !restart_matches.is_present("no_net"),
+            !restart_matches.is_present(NO_NET),
+            &fx_run_params,
             &target_options,
         );
     }

@@ -228,7 +228,8 @@ pub fn setup_network() -> Result<(), Error> {
 }
 
 pub fn start_emulator(
-    with_graphics: bool, with_networking: bool, target_options: &TargetOptions,
+    verbose: bool, with_graphics: bool, with_networking: bool, params: &[&str],
+    target_options: &TargetOptions,
 ) -> Result<(), Error> {
     let fuchsia_dir = fuchsia_dir(target_options)?;
     let fx_script = fx_path(target_options)?;
@@ -240,10 +241,15 @@ pub fn start_emulator(
         args.push("-g");
     }
 
-    println!("fx_script = {:?}", fx_script);
+    if verbose {
+        println!("fx_script = {:?}", fx_script);
+        println!("args = {:?}", args);
+        println!("params = {:?}", params);
+    }
 
     let child = Command::new(fx_script)
         .args(&args)
+        .args(params)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .current_dir(&fuchsia_dir)
