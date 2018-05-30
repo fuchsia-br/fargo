@@ -26,7 +26,8 @@ use failure::{err_msg, Error, ResultExt};
 pub use sdk::TargetOptions;
 use sdk::{cargo_out_dir, cargo_path, clang_archiver_path, clang_c_compiler_path,
           clang_cpp_compiler_path, clang_linker_path, clang_ranlib_path, fidl2_target_gen_dir,
-          rustc_path, shared_libraries_path, sysroot_path, target_gen_dir, FuchsiaConfig};
+          rustc_path, rustdoc_path, shared_libraries_path, sysroot_path, target_gen_dir,
+          FuchsiaConfig};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -215,6 +216,19 @@ fn run_binary(
     Ok(())
 }
 
+fn build_doc(
+    run_cargo_options: RunCargoOptions, target_options: &TargetOptions, no_deps: bool, open: bool
+) -> Result<(), Error> {
+    let mut args = vec![];
+    if no_deps {
+        args.push("--no-deps");
+    }
+    if open {
+        args.push("--open");
+    }
+    run_cargo(run_cargo_options, DOC, &args, &target_options, None, None)
+}
+
 fn load_driver(
     run_cargo_options: RunCargoOptions, target_options: &TargetOptions,
 ) -> Result<(), Error> {
@@ -228,7 +242,8 @@ fn load_driver(
         None,
     )?;
     let cwd = std::env::current_dir()?;
-    let package = cwd.file_name()
+    let package = cwd
+        .file_name()
         .ok_or(err_msg("No current directory"))?
         .to_str()
         .ok_or(err_msg("Invalid current directory"))?;
@@ -353,9 +368,11 @@ pub fn run_cargo(
         fs::canonicalize(std::env::current_exe()?)?
     };
 
-    let mut runner_args = vec![fargo_path
-        .to_str()
-        .ok_or_else(|| err_msg("unable to convert path to utf8 encoding"))?];
+    let mut runner_args = vec![
+        fargo_path
+            .to_str()
+            .ok_or_else(|| err_msg("unable to convert path to utf8 encoding"))?,
+    ];
 
     if options.verbose {
         runner_args.push("-v");
@@ -388,7 +405,8 @@ pub fn run_cargo(
     let sysroot_as_path = sysroot_path(target_options)?;
     let sysroot_as_str = sysroot_as_path.to_str().unwrap();
 
-    let args: Vec<&str> = args.iter()
+    let args: Vec<&str> = args
+        .iter()
         .map(|a| if *a == "++" { "--" } else { *a })
         .collect();
 
@@ -425,6 +443,7 @@ pub fn run_cargo(
             clang_linker_path(target_options)?.to_str().unwrap(),
         )
         .env("RUSTC", rustc_path(target_options)?.to_str().unwrap())
+        .env("RUSTDOC", rustdoc_path(target_options)?.to_str().unwrap())
         .env("FUCHSIA_GEN_ROOT", target_gen_dir(target_options)?)
         .env("FIDL_GEN_ROOT", fidl2_target_gen_dir(target_options)?)
         .arg(subcommand)
@@ -477,6 +496,10 @@ static RELEASE: &str = "release";
 static EXAMPLE: &str = "example";
 static EXAMPLES: &str = "examples";
 
+static DOC: &str = "doc";
+static DOC_OPEN: &str = "open";
+static DOC_NO_DEPS: &str = "no-deps";
+
 static TARGET_CPU: &str = "target-cpu";
 static X64: &str = "x64";
 static ARM64: &str = "arm64";
@@ -487,6 +510,8 @@ static DISABLE_CROSS_ENV: &str = "disable-cross-env";
 
 static NO_NET: &str = "no-net";
 static FX_RUN_PARAMS: &str = "fx-run-params";
+
+static RELEASE_HELP: &str = "Build artifacts in release mode, with optimizations";
 
 #[doc(hidden)]
 pub fn run() -> Result<(), Error> {
@@ -548,7 +573,7 @@ pub fn run() -> Result<(), Error> {
         .subcommand(
             SubCommand::with_name("test")
                 .about("Run unit tests on Fuchsia device or emulator")
-                .arg(Arg::with_name(RELEASE).long(RELEASE).help("Build release"))
+                .arg(Arg::with_name(RELEASE).long(RELEASE).help(RELEASE_HELP))
                 .arg(
                     Arg::with_name("test")
                         .long("test")
@@ -566,7 +591,7 @@ pub fn run() -> Result<(), Error> {
         .subcommand(
             SubCommand::with_name("build")
                 .about("Build binary targeting Fuchsia device or emulator")
-                .arg(Arg::with_name(RELEASE).long(RELEASE).help("Build release"))
+                .arg(Arg::with_name(RELEASE).long(RELEASE).help(RELEASE_HELP))
                 .arg(
                     Arg::with_name("example")
                         .long("example")
@@ -582,7 +607,7 @@ pub fn run() -> Result<(), Error> {
         .subcommand(
             SubCommand::with_name(CHECK)
                 .about("Check binary targeting Fuchsia device or emulator")
-                .arg(Arg::with_name(RELEASE).long(RELEASE).help("Check release"))
+                .arg(Arg::with_name(RELEASE).long(RELEASE).help(RELEASE_HELP))
                 .arg(
                     Arg::with_name(EXAMPLE)
                         .long(EXAMPLE)
@@ -596,9 +621,24 @@ pub fn run() -> Result<(), Error> {
                 ),
         )
         .subcommand(
+            SubCommand::with_name(DOC)
+                .about("Build a package's documentation")
+                .arg(Arg::with_name(RELEASE).long(RELEASE).help(RELEASE_HELP))
+                .arg(
+                    Arg::with_name(DOC_NO_DEPS)
+                        .long(DOC_NO_DEPS)
+                        .help("Don't build documentation for dependencies"),
+                )
+                .arg(
+                    Arg::with_name(DOC_OPEN)
+                        .long(DOC_OPEN)
+                        .help("Opens the docs in a browser after the operation"),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("run")
                 .about("Run binary on Fuchsia device or emulator")
-                .arg(Arg::with_name(RELEASE).long(RELEASE).help("Build release"))
+                .arg(Arg::with_name(RELEASE).long(RELEASE).help(RELEASE_HELP))
                 .arg(
                     Arg::with_name(SET_ROOT_VIEW)
                         .long(SET_ROOT_VIEW)
@@ -820,6 +860,15 @@ pub fn run() -> Result<(), Error> {
             test_target,
         )?;
         return Ok(());
+    }
+
+    if let Some(doc_matches) = matches.subcommand_matches(DOC) {
+        return build_doc(
+            run_cargo_options.release(doc_matches.is_present(RELEASE)),
+            &target_options,
+            doc_matches.is_present(DOC_NO_DEPS),
+            doc_matches.is_present(DOC_OPEN),
+        );
     }
 
     if matches.subcommand_matches("list-devices").is_some() {

@@ -116,7 +116,8 @@ fn main() {
 
     let tmpdir = TempDir::new("cratest").unwrap();
 
-    let results: Vec<CrateResult> = res.crates
+    let results: Vec<CrateResult> = res
+        .crates
         .par_iter()
         .map(|cr| {
             if excludes.contains(&cr.id) {

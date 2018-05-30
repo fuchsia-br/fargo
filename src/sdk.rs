@@ -179,6 +179,14 @@ pub fn rustc_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
     }
 }
 
+pub fn rustdoc_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+    if let Some(rustdoc_path) = get_path_from_env("FARGO_RUSTDOC", false)? {
+        Ok(rustdoc_path)
+    } else {
+        Ok(buildtools_path(target_options)?.join("rust/bin/rustdoc"))
+    }
+}
+
 pub fn toolchain_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
     Ok(buildtools_path(target_options)?.join("clang"))
 }
