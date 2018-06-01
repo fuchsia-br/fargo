@@ -128,6 +128,22 @@ By default fargo will use the copies of cargo and rustc provided in `$FUCHSIA_DI
 To change this behavior, set the environmental variables `FARGO_CARGO` and `FARGO_RUSTC` before
 running fargo.
 
+## Environmental variables set by fargo
+
+CARGO\_TARGET\_[X86\_64|AARCH64]\_UNKNOWN\_FUCHSIA\_RUNNER - set to the fargo binary to run remotely on simulator or device.
+
+CARGO\_TARGET\_[X86\_64|AARCH64]\_UNKNOWN\_FUCHSIA\_RUSTFLAGS - set to provide linker flags
+
+CARGO\_TARGET\_[X86\_64|AARCH64]\_UNKNOWN\_FUCHSIA\_LINKER - set to specify the linker
+
+RUSTC - set to cause cargo to use the copy of rustc in buildtools
+
+RUSTDOC - set to cause cargo to use the copy of rustdoc in buildtools
+
+FUCHSIA\_SHARED\_ROOT - set to the directory containing shared libraries for the current selected architecture. Useful for build scripts.
+
+ZIRCON\_BUILD\_ROOT - set to the zircon build directory for the current architecture. Useful for build scripts.
+
 ## Using crates that link with native libraries
 
 Some crates are wrappers around libraries written in other languages. An

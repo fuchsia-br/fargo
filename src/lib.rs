@@ -25,9 +25,8 @@ use device::{enable_networking, netaddr, netls, scp_to_device, ssh, start_emulat
 use failure::{err_msg, Error, ResultExt};
 pub use sdk::TargetOptions;
 use sdk::{cargo_out_dir, cargo_path, clang_archiver_path, clang_c_compiler_path,
-          clang_cpp_compiler_path, clang_linker_path, clang_ranlib_path, fidl2_target_gen_dir,
-          rustc_path, rustdoc_path, shared_libraries_path, sysroot_path, target_gen_dir,
-          FuchsiaConfig};
+          clang_cpp_compiler_path, clang_linker_path, clang_ranlib_path, rustc_path, rustdoc_path,
+          shared_libraries_path, sysroot_path, zircon_build_path, FuchsiaConfig};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -217,7 +216,7 @@ fn run_binary(
 }
 
 fn build_doc(
-    run_cargo_options: RunCargoOptions, target_options: &TargetOptions, no_deps: bool, open: bool
+    run_cargo_options: RunCargoOptions, target_options: &TargetOptions, no_deps: bool, open: bool,
 ) -> Result<(), Error> {
     let mut args = vec![];
     if no_deps {
@@ -444,8 +443,11 @@ pub fn run_cargo(
         )
         .env("RUSTC", rustc_path(target_options)?.to_str().unwrap())
         .env("RUSTDOC", rustdoc_path(target_options)?.to_str().unwrap())
-        .env("FUCHSIA_GEN_ROOT", target_gen_dir(target_options)?)
-        .env("FIDL_GEN_ROOT", fidl2_target_gen_dir(target_options)?)
+        .env(
+            "FUCHSIA_SHARED_ROOT",
+            shared_libraries_path(target_options)?,
+        )
+        .env("ZIRCON_BUILD_ROOT", zircon_build_path(target_options)?)
         .arg(subcommand)
         .args(target_args)
         .args(args);

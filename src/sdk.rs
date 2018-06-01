@@ -116,16 +116,6 @@ pub fn target_out_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
     possible_target_out_dir(&fuchsia_dir, options)
 }
 
-pub fn target_gen_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
-    let target_out_dir = target_out_dir(options)?;
-    Ok(target_out_dir.join("gen"))
-}
-
-pub fn fidl2_target_gen_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
-    let target_out_dir = target_out_dir(options)?;
-    Ok(target_out_dir.join("fidling/gen"))
-}
-
 pub fn cargo_out_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
     let fuchsia_dir = fuchsia_dir(options)?;
     let target_triple = format!("{}-unknown-fuchsia", options.target_cpu_linker);
@@ -145,6 +135,20 @@ pub fn sysroot_path(options: &TargetOptions) -> Result<PathBuf, Error> {
         .join("sdks")
         .join("zircon_sysroot")
         .join("sysroot"))
+}
+
+pub fn zircon_build_path(options: &TargetOptions) -> Result<PathBuf, Error> {
+    let fuchsia_dir = fuchsia_dir(options)?;
+    let build_name = if options.target_cpu == X64 {
+        "build-x64"
+    } else {
+        "build-arm64"
+    };
+    let zircon_build = fuchsia_dir
+        .join("out")
+        .join("build-zircon")
+        .join(build_name);
+    Ok(zircon_build)
 }
 
 pub fn shared_libraries_path(options: &TargetOptions) -> Result<PathBuf, Error> {
