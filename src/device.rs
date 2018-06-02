@@ -227,9 +227,15 @@ pub fn setup_network() -> Result<(), Error> {
     Ok(())
 }
 
+pub struct StartEmulatorOptions {
+    pub verbose: bool,
+    pub with_graphics: bool,
+    pub with_networking: bool,
+    pub disable_virtcon: bool,
+}
+
 pub fn start_emulator(
-    verbose: bool, with_graphics: bool, with_networking: bool, params: &[&str],
-    target_options: &TargetOptions,
+    options: &StartEmulatorOptions, params: &[&str], target_options: &TargetOptions,
 ) -> Result<(), Error> {
     let fuchsia_dir = fuchsia_dir(target_options)?;
     let fx_script = fx_path(target_options)?;
@@ -237,11 +243,16 @@ pub fn start_emulator(
         bail!("fx script not found at {:?}", fx_script);
     }
     let mut args = vec!["run", "-N"];
-    if with_graphics {
+    if options.with_graphics {
         args.push("-g");
     }
 
-    if verbose {
+    if options.disable_virtcon {
+        args.push("-c");
+        args.push("virtcon.disable");
+    }
+
+    if options.verbose {
         println!("fx_script = {:?}", fx_script);
         println!("args = {:?}", args);
         println!("params = {:?}", params);
@@ -258,7 +269,7 @@ pub fn start_emulator(
 
     println!("emulator started with process ID {}", child.id());
 
-    if with_networking {
+    if options.with_networking {
         setup_network()
     } else {
         Ok(())
