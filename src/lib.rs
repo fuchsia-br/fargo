@@ -29,7 +29,9 @@ use sdk::{cargo_out_dir, cargo_path, clang_archiver_path, clang_c_compiler_path,
           clang_cpp_compiler_path, clang_linker_path, clang_ranlib_path, rustc_path, rustdoc_path,
           shared_libraries_path, sysroot_path, zircon_build_path, FuchsiaConfig};
 use std::fs;
-use std::path::PathBuf;
+use std::fs::File;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use utils::strip_binary;
 
@@ -303,6 +305,67 @@ impl RunCargoOptions {
     }
 }
 
+fn get_target_triple(target_options: &TargetOptions) -> String {
+    let triple_cpu = if (target_options.target_cpu) == X64 {
+        "x86_64"
+    } else {
+        "aarch64"
+    };
+
+    format!("{}-unknown-fuchsia", triple_cpu)
+}
+
+fn get_rustflags(
+    target_options: &TargetOptions, sysroot_as_path: &PathBuf,
+) -> Result<String, Error> {
+    Ok(format!(
+        "-C link-arg=--target={}-unknown-fuchsia -C link-arg=--sysroot={} -Lnative={}",
+        get_target_triple(target_options),
+        sysroot_as_path.to_str().unwrap(),
+        shared_libraries_path(target_options)?.to_str().unwrap(),
+    ))
+}
+
+fn make_fargo_command(
+    runner: Option<PathBuf>, options: &RunCargoOptions, target_options: &TargetOptions,
+    additional_target_args: Option<&str>,
+) -> Result<String, Error> {
+    let set_root_view_arg = format!("--{}", SET_ROOT_VIEW);
+
+    let fargo_path = if runner.is_some() {
+        runner.unwrap()
+    } else {
+        fs::canonicalize(std::env::current_exe()?)?
+    };
+
+    let mut runner_args = vec![
+        fargo_path
+            .to_str()
+            .ok_or_else(|| err_msg("unable to convert path to utf8 encoding"))?,
+    ];
+
+    if options.verbose {
+        runner_args.push("-v");
+    }
+
+    if let Some(device_name) = target_options.device_name {
+        runner_args.push("--device-name");
+        runner_args.push(device_name);
+    }
+
+    runner_args.push("run-on-target");
+
+    if options.set_root_view {
+        runner_args.push(&set_root_view_arg);
+    }
+
+    if let Some(args_for_target) = additional_target_args {
+        runner_args.push(&args_for_target);
+    }
+
+    Ok(runner_args.join(" "))
+}
+
 /// Runs the cargo tool configured to target Fuchsia. When used as a library,
 /// the runner options must contain the path to fargo or some other program
 /// that implements the `run-on-target` subcommand in a way compatible with
@@ -336,13 +399,7 @@ pub fn run_cargo(
         println!("target_options = {:?}", target_options);
     }
 
-    let set_root_view_arg = format!("--{}", SET_ROOT_VIEW);
-
-    let triple_cpu = if target_options.target_cpu == X64 {
-        "x86_64"
-    } else {
-        "aarch64"
-    };
+    let triple_cpu = get_target_triple(target_options);
     let target_triple = format!("{}-unknown-fuchsia", triple_cpu);
     let mut target_args = vec!["--target", &target_triple];
 
@@ -362,39 +419,8 @@ pub fn run_cargo(
 
     let target_triple_uc = format!("{}_unknown_fuchsia", triple_cpu).to_uppercase();
 
-    let fargo_path = if runner.is_some() {
-        runner.unwrap()
-    } else {
-        fs::canonicalize(std::env::current_exe()?)?
-    };
-
-    let mut runner_args = vec![
-        fargo_path
-            .to_str()
-            .ok_or_else(|| err_msg("unable to convert path to utf8 encoding"))?,
-    ];
-
-    if options.verbose {
-        runner_args.push("-v");
-        target_args.push("-v");
-    }
-
-    if let Some(device_name) = target_options.device_name {
-        runner_args.push("--device-name");
-        runner_args.push(device_name);
-    }
-
-    runner_args.push("run-on-target");
-
-    if options.set_root_view {
-        runner_args.push(&set_root_view_arg);
-    }
-
-    if let Some(args_for_target) = additional_target_args {
-        runner_args.push(&args_for_target);
-    }
-
-    let fargo_command = runner_args.join(" ");
+    let fargo_command =
+        make_fargo_command(runner, &options, target_options, additional_target_args)?;
 
     if options.verbose {
         println!("fargo_command: {:?}", fargo_command);
@@ -431,12 +457,7 @@ pub fn run_cargo(
     cmd.env(runner_env_name, fargo_command)
         .env(
             rustflags_env_name,
-            format!(
-                "-C link-arg=--target={}-unknown-fuchsia -C link-arg=--sysroot={} -Lnative={}",
-                triple_cpu,
-                sysroot_as_str,
-                shared_libraries_path(target_options)?.to_str().unwrap(),
-            ),
+            get_rustflags(target_options, &sysroot_as_path)?,
         )
         .env(
             linker_env_name,
@@ -492,6 +513,54 @@ pub fn run_cargo(
     Ok(())
 }
 
+fn write_config(options: &RunCargoOptions, target_options: &TargetOptions) -> Result<(), Error> {
+    let cargo_dir_path = Path::new(".cargo");
+    if cargo_dir_path.exists() {
+        if !cargo_dir_path.is_dir() {
+            bail!(
+                "fargo wants to create a directory {:#?}, but there is an existing file in the way",
+                cargo_dir_path
+            );
+        }
+    } else {
+        fs::create_dir(cargo_dir_path)?;
+    }
+
+    let mut config = File::create(".cargo/config")?;
+
+    let sysroot_as_path = sysroot_path(target_options)?;
+    writeln!(config, "[target.{}]", get_target_triple(target_options))?;
+    writeln!(
+        config,
+        "rustflags = \"{}\"",
+        get_rustflags(target_options, &sysroot_as_path)?
+    )?;
+    writeln!(
+        config,
+        "linker = \"{}\"",
+        clang_linker_path(target_options)?.to_str().unwrap()
+    )?;
+    writeln!(
+        config,
+        "runner = \"{}\"",
+        make_fargo_command(None, options, target_options, None)?
+    )?;
+    writeln!(config, "")?;
+    writeln!(config, "[build]")?;
+    writeln!(
+        config,
+        "rustc = \"{}\"",
+        rustc_path(target_options)?.to_str().unwrap()
+    )?;
+    writeln!(
+        config,
+        "rustdoc = \"{}\"",
+        rustdoc_path(target_options)?.to_str().unwrap()
+    )?;
+    writeln!(config, "target = \"{}\"", get_target_triple(target_options))?;
+    Ok(())
+}
+
 static SET_ROOT_VIEW: &str = "set-root-view";
 
 static CHECK: &str = "check";
@@ -520,6 +589,8 @@ static START: &str = "start";
 static RESTART: &str = "restart";
 static GRAPHICS: &str = "graphics";
 static DISABLE_VIRTCON: &str = "disable-virtcon";
+
+static WRITE_CONFIG: &str = "write-config";
 
 #[doc(hidden)]
 pub fn run() -> Result<(), Error> {
@@ -755,6 +826,9 @@ pub fn run() -> Result<(), Error> {
                             .help("Don't pass --host to configure"),
                     ),
             )
+            .subcommand(SubCommand::with_name(WRITE_CONFIG).about(
+                "Write a .cargo/config file to allow cargo to operate correctly for Fuchsia",
+            ))
             .get_matches();
 
     let verbose = matches.is_present("verbose");
@@ -1009,6 +1083,10 @@ pub fn run() -> Result<(), Error> {
             &target_options,
         )?;
         return Ok(());
+    }
+
+    if let Some(_write_config_matches) = matches.subcommand_matches(WRITE_CONFIG) {
+        return write_config(&run_cargo_options, &target_options);
     }
 
     Ok(())

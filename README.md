@@ -8,16 +8,15 @@
 
     FLAGS:
             --debug-os             Use debug user.bootfs and ssh keys
-            --disable-cross-env    Disable the setting of CC, AR and such environmental
-                                   variables.
+            --disable-cross-env    Disable the setting of CC, AR and such environmental variables.
         -h, --help                 Prints help information
         -V, --version              Prints version information
         -v, --verbose              Print verbose output while performing commands
 
     OPTIONS:
         -N, --device-name <device-name>
-                Name of device to target, needed if there are multiple devices visible on
-                the network
+                Name of device to target, needed if there are multiple devices visible on the
+                network
         -T, --target-cpu <target-cpu>
                 Architecture of target device [default: x64]  [values: x64, arm64]
 
@@ -26,11 +25,11 @@
         autotest             Auto build and test in Fuchsia device or emulator
         build                Build binary targeting Fuchsia device or emulator
         build-tests          Build tests for Fuchsia device or emulator
-        cargo                Run a cargo command for Fuchsia. Use -- to indicate that
-                             all following arguments should be passed to cargo.
+        cargo                Run a cargo command for Fuchsia. Use -- to indicate that all
+                             following arguments should be passed to cargo.
         check                Check binary targeting Fuchsia device or emulator
-        configure            Run a configure script for the cross compilation
-                             environment
+        configure            Run a configure script for the cross compilation environment
+        doc                  Build a package's documentation
         enable-networking    Enable networking for a running emulator
         help                 Prints this message or the help of the given subcommand(s)
         list-devices         List visible Fuchsia devices
@@ -42,6 +41,8 @@
         start                Start a Fuchsia emulator
         stop                 Stop all Fuchsia emulators
         test                 Run unit tests on Fuchsia device or emulator
+        write-config         Write a .cargo/config file to allow cargo to operate correctly
+                             for Fuchsia
 
 The `fargo-test` directory contains something one can use to test-drive.
 
@@ -112,6 +113,17 @@ Sometimes you want to pass parameters through fargo and cargo and on to somethin
     fargo cargo rustc -- ++ --emit=llvm-ir
 
 will get cargo to cause rustc to emil llvm ir files.
+
+## Creating a .cargo/config
+
+`fargo --write-config` will create a .cargo directory with a config file that tells cargo
+how to compile artifacts for Fuchsia and how to run them. Creating such a config file
+might allow some tools to work that otherwise would not be able to compile artifacts
+for Fuchsia.
+
+The config file created will be for the architecture and debug/release options that are
+passed to fargo with the `write-config` command. If you wish to switch to a different
+architecture or build, re-run `write-config`.
 
 ## Getting help
 
