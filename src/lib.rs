@@ -305,12 +305,16 @@ impl RunCargoOptions {
     }
 }
 
-fn get_target_triple(target_options: &TargetOptions) -> String {
-    let triple_cpu = if (target_options.target_cpu) == X64 {
+fn get_triple_cpu(target_options: &TargetOptions) -> String {
+    if (target_options.target_cpu) == X64 {
         "x86_64"
     } else {
         "aarch64"
-    };
+    }.to_string()
+}
+
+fn get_target_triple(target_options: &TargetOptions) -> String {
+    let triple_cpu = get_triple_cpu(target_options);
 
     format!("{}-unknown-fuchsia", triple_cpu)
 }
@@ -399,8 +403,8 @@ pub fn run_cargo(
         println!("target_options = {:?}", target_options);
     }
 
-    let triple_cpu = get_target_triple(target_options);
-    let target_triple = format!("{}-unknown-fuchsia", triple_cpu);
+    let triple_cpu = get_triple_cpu(target_options);
+    let target_triple = get_target_triple(target_options);
     let mut target_args = vec!["--target", &target_triple];
 
     if options.release {
