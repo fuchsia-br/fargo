@@ -114,6 +114,12 @@ Sometimes you want to pass parameters through fargo and cargo and on to somethin
 
 will get cargo to cause rustc to emil llvm ir files.
 
+### Running view-producing Rust binaries
+
+fargo run has an option, `--run-with-tiles`, that will use `tiles_ctl add` to launch the Rust
+binary. Use this option when running if your binaries wants to provide a
+[view provider service](https://fuchsia.googlesource.com/garnet/+/master/public/fidl/fuchsia.ui.views_v1/view_provider.fidl)
+
 ## Creating a .cargo/config
 
 `fargo --write-config` will create a .cargo directory with a config file that tells cargo

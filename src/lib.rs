@@ -62,13 +62,13 @@ fn copy_to_target(
 }
 
 fn run_program_on_target(
-    filename: &str, verbose: bool, target_options: &TargetOptions, set_root_view: bool,
+    filename: &str, verbose: bool, target_options: &TargetOptions, run_with_tiles: bool,
     params: &[&str], test_args: Option<&str>,
 ) -> Result<(), Error> {
     let source_path = PathBuf::from(&filename);
     let stripped_source_path = strip_binary(&source_path, target_options)?;
     let destination_path = copy_to_target(&stripped_source_path, verbose, target_options)?;
-    let mut command_string = (if set_root_view { "set_root_view " } else { "" }).to_string();
+    let mut command_string = (if run_with_tiles { "tiles_ctl add " } else { "" }).to_string();
     command_string.push_str(&destination_path);
     for param in params {
         command_string.push(' ');
@@ -82,11 +82,6 @@ fn run_program_on_target(
 
     if verbose {
         println!("running {}", command_string);
-    }
-
-    if set_root_view {
-        ssh(verbose, target_options, "killall scene_manager").unwrap_or(());
-        ssh(verbose, target_options, "killall set_root_view").unwrap_or(());
     }
 
     ssh(verbose, target_options, &command_string)?;
@@ -263,7 +258,7 @@ fn load_driver(
 pub struct RunCargoOptions {
     pub verbose: bool,
     pub release: bool,
-    pub set_root_view: bool,
+    pub run_with_tiles: bool,
     pub disable_cross: bool,
 }
 
@@ -272,7 +267,7 @@ impl RunCargoOptions {
         RunCargoOptions {
             verbose,
             release,
-            set_root_view: false,
+            run_with_tiles: false,
             disable_cross: false,
         }
     }
@@ -281,7 +276,7 @@ impl RunCargoOptions {
         RunCargoOptions {
             verbose: self.verbose,
             release: self.release,
-            set_root_view: self.set_root_view,
+            run_with_tiles: self.run_with_tiles,
             disable_cross,
         }
     }
@@ -290,16 +285,16 @@ impl RunCargoOptions {
         RunCargoOptions {
             verbose: self.verbose,
             release: release,
-            set_root_view: self.set_root_view,
+            run_with_tiles: self.run_with_tiles,
             disable_cross: self.disable_cross,
         }
     }
 
-    pub fn set_root_view(&self, set_root_view: bool) -> RunCargoOptions {
+    pub fn run_with_tiles(&self, run_with_tiles: bool) -> RunCargoOptions {
         RunCargoOptions {
             verbose: self.verbose,
             release: self.release,
-            set_root_view: set_root_view,
+            run_with_tiles: run_with_tiles,
             disable_cross: self.disable_cross,
         }
     }
@@ -334,7 +329,7 @@ fn make_fargo_command(
     runner: Option<PathBuf>, options: &RunCargoOptions, target_options: &TargetOptions,
     additional_target_args: Option<&str>,
 ) -> Result<String, Error> {
-    let set_root_view_arg = format!("--{}", SET_ROOT_VIEW);
+    let tiles_arg = format!("--{}", TILES);
 
     let fargo_path = if runner.is_some() {
         runner.unwrap()
@@ -359,8 +354,8 @@ fn make_fargo_command(
 
     runner_args.push("run-on-target");
 
-    if options.set_root_view {
-        runner_args.push(&set_root_view_arg);
+    if options.run_with_tiles {
+        runner_args.push(&tiles_arg);
     }
 
     if let Some(args_for_target) = additional_target_args {
@@ -385,7 +380,7 @@ fn make_fargo_command(
 ///     RunCargoOptions {
 ///         verbose: false,
 ///         release: true,
-///         set_root_view: false,
+///         run_with_tiles: false,
 ///         disable_cross: false,
 ///     },
 ///     "help",
@@ -565,7 +560,7 @@ fn write_config(options: &RunCargoOptions, target_options: &TargetOptions) -> Re
     Ok(())
 }
 
-static SET_ROOT_VIEW: &str = "set-root-view";
+static TILES: &str = "run-with-tiles";
 
 static CHECK: &str = "check";
 static RELEASE: &str = "release";
@@ -724,9 +719,9 @@ pub fn run() -> Result<(), Error> {
                     .about("Run binary on Fuchsia device or emulator")
                     .arg(Arg::with_name(RELEASE).long(RELEASE).help(RELEASE_HELP))
                     .arg(
-                        Arg::with_name(SET_ROOT_VIEW)
-                            .long(SET_ROOT_VIEW)
-                            .help("Use set_root_view to run binary."),
+                        Arg::with_name(TILES)
+                            .long(TILES)
+                            .help("Use tiles_ctl add to run binary."),
                     )
                     .arg(
                         Arg::with_name("example")
@@ -804,9 +799,9 @@ pub fn run() -> Result<(), Error> {
                             .help("arguments to pass to the test runner"),
                     )
                     .arg(
-                        Arg::with_name(SET_ROOT_VIEW)
-                            .long(SET_ROOT_VIEW)
-                            .help("Use set_root_view to run binary."),
+                        Arg::with_name(TILES)
+                            .long(TILES)
+                            .help("Use tiles to run binary."),
                     )
                     .arg(
                         Arg::with_name("run_on_target_params")
@@ -847,7 +842,7 @@ pub fn run() -> Result<(), Error> {
     let run_cargo_options = RunCargoOptions {
         verbose,
         release: false,
-        set_root_view: false,
+        run_with_tiles: false,
         disable_cross,
     };
 
@@ -932,7 +927,7 @@ pub fn run() -> Result<(), Error> {
         return run_binary(
             run_cargo_options
                 .release(run_matches.is_present(RELEASE))
-                .set_root_view(run_matches.is_present(SET_ROOT_VIEW)),
+                .run_with_tiles(run_matches.is_present(TILES)),
             &target_options,
             &params,
         );
@@ -1035,7 +1030,7 @@ pub fn run() -> Result<(), Error> {
             RunCargoOptions {
                 verbose,
                 release: false,
-                set_root_view: false,
+                run_with_tiles: false,
                 disable_cross: disable_cross,
             },
             subcommand,
@@ -1057,7 +1052,7 @@ pub fn run() -> Result<(), Error> {
             program,
             verbose,
             &target_options,
-            run_on_target_matches.is_present(SET_ROOT_VIEW),
+            run_on_target_matches.is_present(TILES),
             args,
             test_args,
         );
