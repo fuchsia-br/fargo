@@ -464,6 +464,7 @@ pub fn run_cargo(
         )
         .env("RUSTC", rustc_path(target_options)?.to_str().unwrap())
         .env("RUSTDOC", rustdoc_path(target_options)?.to_str().unwrap())
+        .env("RUSTDOCFLAGS", "--cap-lints allow -Z unstable-options")
         .env(
             "FUCHSIA_SHARED_ROOT",
             shared_libraries_path(target_options)?,
