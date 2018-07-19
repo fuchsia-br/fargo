@@ -347,6 +347,10 @@ fn make_fargo_command(
         runner_args.push("-v");
     }
 
+    if !target_options.release_os {
+        runner_args.push("--debug-os");
+    }
+
     if let Some(device_name) = target_options.device_name {
         runner_args.push("--device-name");
         runner_args.push(device_name);
