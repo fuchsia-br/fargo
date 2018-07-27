@@ -318,7 +318,7 @@ fn get_rustflags(
     target_options: &TargetOptions, sysroot_as_path: &PathBuf,
 ) -> Result<String, Error> {
     Ok(format!(
-        "-C link-arg=--target={}-unknown-fuchsia -C link-arg=--sysroot={} -Lnative={}",
+        "-C link-arg=--target={} -C link-arg=--sysroot={} -Lnative={}",
         get_target_triple(target_options),
         sysroot_as_path.to_str().unwrap(),
         shared_libraries_path(target_options)?.to_str().unwrap(),
