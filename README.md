@@ -79,16 +79,6 @@ Fargo uses ssh to communicate between your host computer and either Qemu or a
 real device to copy build results and execute them. For Qemu there is a bit of
 [tricky set up](https://fuchsia.googlesource.com/magenta/+/master/docs/qemu.md#Enabling-Networking-under-QEMU-x86_64-only) to do.
 
-Finally, you need to be using nightly (as opposed to stable) and have the `x86_64-unknown-fuchsia`
-target installed. If you installed rust with [rustup](https://www.rustup.rs) you can
-install the target with:
-
-    rustup default nightly
-    rustup target add x86_64-unknown-fuchsia
-
-If you installed Rust some other way, you'll have to do some research about how to get the nightly
-build and `x86_64-unknown-fuchsia` support into your installation.
-
 ### Testing if Fargo is working
 
 Now to verify if fargo is working correctly, try starting a fuchsia machine and executing a test.
@@ -145,6 +135,13 @@ folks happens to be paying attention. More reliable is the
 By default fargo will use the copies of cargo and rustc provided in `$FUCHSIA_DIR/buildtools`.
 To change this behavior, set the environmental variables `FARGO_CARGO` and `FARGO_RUSTC` before
 running fargo.
+
+If you need to be using a different version of nightly for some reason, you'll need the `x86_64-fuchsia` target.
+If you installed rust with [rustup](https://www.rustup.rs) you can install the target with:
+
+    rustup default nightly
+    rustup target add x86_64-fuchsia
+
 
 ## Environmental variables set by fargo
 
