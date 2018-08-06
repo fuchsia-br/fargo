@@ -311,7 +311,7 @@ fn get_triple_cpu(target_options: &TargetOptions) -> String {
 fn get_target_triple(target_options: &TargetOptions) -> String {
     let triple_cpu = get_triple_cpu(target_options);
 
-    format!("{}-unknown-fuchsia", triple_cpu)
+    format!("{}-fuchsia", triple_cpu)
 }
 
 fn get_rustflags(
@@ -420,7 +420,7 @@ pub fn run_cargo(
         println!("target_args = {:?}", target_args);
     }
 
-    let target_triple_uc = format!("{}_unknown_fuchsia", triple_cpu).to_uppercase();
+    let target_triple_uc = format!("{}_fuchsia", triple_cpu).to_uppercase();
 
     let fargo_command =
         make_fargo_command(runner, &options, target_options, additional_target_args)?;
