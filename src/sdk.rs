@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 use failure::Error;
+use get_target_triple;
 use std::env;
 use std::fs::File;
 use std::io::Read;
@@ -118,7 +119,7 @@ pub fn target_out_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
 
 pub fn cargo_out_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
     let fuchsia_dir = fuchsia_dir(options)?;
-    let target_triple = format!("{}-unknown-fuchsia", options.target_cpu_linker);
+    let target_triple = get_target_triple(options);
     Ok(fuchsia_dir
         .join("garnet")
         .join("target")
