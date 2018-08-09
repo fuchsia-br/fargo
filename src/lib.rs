@@ -59,13 +59,17 @@ fn copy_to_target(
 }
 
 fn run_program_on_target(
-    filename: &str, verbose: bool, target_options: &TargetOptions<'_, '_>, run_with_tiles: bool,
+    filename: &str, verbose: bool, target_options: &TargetOptions<'_, '_>, run_mode: RunMode,
     params: &[&str], test_args: Option<&str>,
 ) -> Result<(), Error> {
     let source_path = PathBuf::from(&filename);
     let stripped_source_path = strip_binary(&source_path, target_options)?;
     let destination_path = copy_to_target(&stripped_source_path, verbose, target_options)?;
-    let mut command_string = (if run_with_tiles { "tiles_ctl add " } else { "" }).to_string();
+    let mut command_string = (match run_mode {
+        RunMode::Tiles => "tiles_ctl add ",
+        RunMode::Run => "run ",
+        RunMode::Normal => "",
+    }).to_string();
     command_string.push_str(&destination_path);
     for param in params {
         command_string.push(' ');
@@ -252,11 +256,28 @@ fn load_driver(
     Ok(())
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum RunMode {
+    Normal,
+    Run,
+    Tiles,
+}
+
+fn run_switches_to_mode(tiles: bool, run: bool) -> RunMode {
+    if tiles {
+        RunMode::Tiles
+    } else if run {
+        RunMode::Run
+    } else {
+        RunMode::Normal
+    }
+}
+
 #[derive(Debug)]
 pub struct RunCargoOptions {
     pub verbose: bool,
     pub release: bool,
-    pub run_with_tiles: bool,
+    pub run_mode: RunMode,
     pub disable_cross: bool,
     pub manifest_path: Option<PathBuf>,
 }
@@ -266,7 +287,7 @@ impl RunCargoOptions {
         RunCargoOptions {
             verbose,
             release,
-            run_with_tiles: false,
+            run_mode: RunMode::Normal,
             disable_cross: false,
             manifest_path: None,
         }
@@ -276,7 +297,7 @@ impl RunCargoOptions {
         RunCargoOptions {
             verbose: self.verbose,
             release: self.release,
-            run_with_tiles: self.run_with_tiles,
+            run_mode: self.run_mode,
             disable_cross,
             manifest_path: self.manifest_path.clone(),
         }
@@ -286,17 +307,17 @@ impl RunCargoOptions {
         RunCargoOptions {
             verbose: self.verbose,
             release: release,
-            run_with_tiles: self.run_with_tiles,
+            run_mode: self.run_mode,
             disable_cross: self.disable_cross,
             manifest_path: self.manifest_path.clone(),
         }
     }
 
-    pub fn run_with_tiles(&self, run_with_tiles: bool) -> RunCargoOptions {
+    pub fn run_mode(&self, run_mode: RunMode) -> RunCargoOptions {
         RunCargoOptions {
             verbose: self.verbose,
             release: self.release,
-            run_with_tiles: run_with_tiles,
+            run_mode: run_mode,
             disable_cross: self.disable_cross,
             manifest_path: self.manifest_path.clone(),
         }
@@ -306,7 +327,7 @@ impl RunCargoOptions {
         RunCargoOptions {
             verbose: self.verbose,
             release: self.release,
-            run_with_tiles: self.run_with_tiles,
+            run_mode: self.run_mode,
             disable_cross: self.disable_cross,
             manifest_path: manifest_path,
         }
@@ -343,6 +364,7 @@ fn make_fargo_command(
     additional_target_args: Option<&str>,
 ) -> Result<String, Error> {
     let tiles_arg = format!("--{}", TILES);
+    let run_arg = format!("--{}", RUN);
 
     let fargo_path = if runner.is_some() {
         runner.unwrap()
@@ -369,10 +391,12 @@ fn make_fargo_command(
         runner_args.push(device_name);
     }
 
-    runner_args.push("run-on-target");
+    runner_args.push(RUN_ON_TARGET);
 
-    if options.run_with_tiles {
-        runner_args.push(&tiles_arg);
+    match options.run_mode {
+        RunMode::Normal => (),
+        RunMode::Tiles => runner_args.push(&tiles_arg),
+        RunMode::Run => runner_args.push(&run_arg),
     }
 
     if let Some(args_for_target) = additional_target_args {
@@ -398,14 +422,14 @@ fn convert_manifest_path(possible_path: &Option<&str>) -> Option<PathBuf> {
 /// # Examples
 ///
 /// ```
-/// use fargo::{run_cargo, RunCargoOptions, TargetOptions};
+/// use fargo::{run_cargo, RunCargoOptions, RunMode, TargetOptions};
 ///
 /// let target_options = TargetOptions::new(true, "x64", None);
 /// run_cargo(
 ///     &RunCargoOptions {
 ///         verbose: false,
 ///         release: true,
-///         run_with_tiles: false,
+///         run_mode: RunMode::Normal,
 ///         disable_cross: false,
 ///         manifest_path: None,
 ///     },
@@ -591,6 +615,7 @@ fn write_config(
 }
 
 static TILES: &str = "run-with-tiles";
+static RUN: &str = "run-with-run";
 
 static CHECK: &str = "check";
 static RELEASE: &str = "release";
@@ -621,6 +646,8 @@ static GRAPHICS: &str = "graphics";
 static DISABLE_VIRTCON: &str = "disable-virtcon";
 
 static WRITE_CONFIG: &str = "write-config";
+
+static RUN_ON_TARGET: &str = "run-on-target";
 
 #[doc(hidden)]
 pub fn run() -> Result<(), Error> {
@@ -741,7 +768,8 @@ pub fn run() -> Result<(), Error> {
                     Arg::with_name(TILES)
                         .long(TILES)
                         .help("Use tiles_ctl add to run binary."),
-                ).arg(
+                ).arg(Arg::with_name(RUN).long(RUN).help("Use run to run binary."))
+                .arg(
                     Arg::with_name("example")
                         .long("example")
                         .value_name("example")
@@ -798,7 +826,7 @@ pub fn run() -> Result<(), Error> {
                 ).arg(Arg::with_name(SUBCOMMAND).required(true))
                 .arg(Arg::with_name("cargo_params").index(2).multiple(true)),
         ).subcommand(
-            SubCommand::with_name("run-on-target")
+            SubCommand::with_name(RUN_ON_TARGET)
                 .about("Act as a test runner for cargo")
                 .arg(
                     Arg::with_name("test_args")
@@ -809,7 +837,8 @@ pub fn run() -> Result<(), Error> {
                     Arg::with_name(TILES)
                         .long(TILES)
                         .help("Use tiles to run binary."),
-                ).arg(
+                ).arg(Arg::with_name(RUN).long(RUN).help("Use run to run binary."))
+                .arg(
                     Arg::with_name("run_on_target_params")
                         .index(1)
                         .multiple(true),
@@ -845,7 +874,7 @@ pub fn run() -> Result<(), Error> {
     let run_cargo_options = RunCargoOptions {
         verbose,
         release: false,
-        run_with_tiles: false,
+        run_mode: RunMode::Normal,
         disable_cross,
         manifest_path: None,
     };
@@ -941,10 +970,12 @@ pub fn run() -> Result<(), Error> {
         }
 
         let manifest_path = convert_manifest_path(&run_matches.value_of(MANIFEST_PATH));
+        let run_mode =
+            run_switches_to_mode(run_matches.is_present(TILES), run_matches.is_present(RUN));
         return run_binary(
             &run_cargo_options
                 .release(run_matches.is_present(RELEASE))
-                .run_with_tiles(run_matches.is_present(TILES))
+                .run_mode(run_mode)
                 .manifest_path(manifest_path),
             &target_options,
             &params,
@@ -1054,7 +1085,7 @@ pub fn run() -> Result<(), Error> {
             &RunCargoOptions {
                 verbose,
                 release: false,
-                run_with_tiles: false,
+                run_mode: RunMode::Normal,
                 disable_cross: disable_cross,
                 manifest_path: None,
             },
@@ -1066,21 +1097,18 @@ pub fn run() -> Result<(), Error> {
         );
     }
 
-    if let Some(run_on_target_matches) = matches.subcommand_matches("run-on-target") {
+    if let Some(run_on_target_matches) = matches.subcommand_matches(RUN_ON_TARGET) {
         let run_params = run_on_target_matches
             .values_of("run_on_target_params")
             .map(|x| x.collect())
             .unwrap_or_else(|| vec![]);
         let test_args = run_on_target_matches.value_of("test_args");
         let (program, args) = run_params.split_first().unwrap();
-        return run_program_on_target(
-            program,
-            verbose,
-            &target_options,
+        let run_mode = run_switches_to_mode(
             run_on_target_matches.is_present(TILES),
-            args,
-            test_args,
+            run_on_target_matches.is_present(RUN),
         );
+        return run_program_on_target(program, verbose, &target_options, run_mode, args, test_args);
     }
 
     if let Some(pkg_matches) = matches.subcommand_matches("pkg-config") {
