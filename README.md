@@ -69,11 +69,12 @@ preparation for using fargo
     ./scripts/fx build-zircon
     ./scripts/fx build
 
-Once this build is complete, clone and build fargo.
+Once this build is complete, clone and build fargo. For this you will need
+a working host Rust installation, most easily installed with [rustup](https://rustup.rs).
 
     git clone https://fuchsia.googlesource.com/fargo
     cd fargo
-    cargo install --force
+    cargo +nightly install --force
 
 Fargo uses ssh to communicate between your host computer and either Qemu or a
 real device to copy build results and execute them. For Qemu there is a bit of

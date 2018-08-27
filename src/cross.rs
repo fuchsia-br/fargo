@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+use crate::sdk::{sysroot_path, toolchain_path, TargetOptions};
 use failure::{Error, ResultExt};
-use sdk::{sysroot_path, toolchain_path, TargetOptions};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
-pub fn cross_root(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn cross_root(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     let home_value = env::var("HOME")?;
 
     Ok(PathBuf::from(home_value)
@@ -18,12 +18,12 @@ pub fn cross_root(target_options: &TargetOptions) -> Result<PathBuf, Error> {
         .join(target_options.target_cpu))
 }
 
-pub fn pkg_config_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn pkg_config_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     Ok(cross_root(target_options)?.join("lib").join("pkgconfig"))
 }
 
 pub fn run_pkg_config(
-    verbose: bool, args: &[&str], target_options: &TargetOptions,
+    verbose: bool, args: &[&str], target_options: &TargetOptions<'_, '_>,
 ) -> Result<i32, Error> {
     let mut cmd = Command::new("pkg-config");
 
@@ -45,7 +45,7 @@ pub fn run_pkg_config(
 }
 
 pub fn run_configure(
-    verbose: bool, use_host: bool, args: &[&str], target_options: &TargetOptions,
+    verbose: bool, use_host: bool, args: &[&str], target_options: &TargetOptions<'_, '_>,
 ) -> Result<bool, Error> {
     let cwd = fs::canonicalize(env::current_dir()?)
         .context("run_configure: canonicalize working directory")?;

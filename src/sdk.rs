@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use failure::Error;
-use get_target_triple;
+use crate::get_target_triple;
+use crate::utils::is_mac;
+use crate::X64;
+use failure::{bail, Error};
 use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
-use utils::is_mac;
-use X64;
 
 /// The `TargetOptions` struct bundles together a number of parameters specific to
 /// the Fuchsia target that need to be passed through various internal functions. For
@@ -70,7 +70,7 @@ fn get_path_from_env(env_name: &str, require_dir: bool) -> Result<Option<PathBuf
     Ok(None)
 }
 
-pub fn fuchsia_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn fuchsia_dir(options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     let fuchsia_dir = if let Some(fuchsia_root) = get_path_from_env("FUCHSIA_ROOT", true)? {
         fuchsia_root
     } else if let Some(fuchsia_dir) = get_path_from_env("FUCHSIA_DIR", true)? {
@@ -97,7 +97,7 @@ pub fn fuchsia_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
 }
 
 pub fn possible_target_out_dir(
-    fuchsia_dir: &PathBuf, options: &TargetOptions,
+    fuchsia_dir: &PathBuf, options: &TargetOptions<'_, '_>,
 ) -> Result<PathBuf, Error> {
     let out_dir_name_prefix = if options.release_os {
         "release"
@@ -112,12 +112,12 @@ pub fn possible_target_out_dir(
     Ok(target_out_dir)
 }
 
-pub fn target_out_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn target_out_dir(options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     let fuchsia_dir = fuchsia_dir(options)?;
     possible_target_out_dir(&fuchsia_dir, options)
 }
 
-pub fn cargo_out_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn cargo_out_dir(options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     let fuchsia_dir = fuchsia_dir(options)?;
     let target_triple = get_target_triple(options);
     Ok(fuchsia_dir
@@ -127,11 +127,11 @@ pub fn cargo_out_dir(options: &TargetOptions) -> Result<PathBuf, Error> {
         .join("debug"))
 }
 
-pub fn strip_tool_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn strip_tool_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     Ok(toolchain_path(target_options)?.join("bin/llvm-objcopy"))
 }
 
-pub fn sysroot_path(options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn sysroot_path(options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     Ok(target_out_dir(&options)?
         .join("sdks")
         .join("zircon_sysroot")
@@ -140,7 +140,7 @@ pub fn sysroot_path(options: &TargetOptions) -> Result<PathBuf, Error> {
         .join("sysroot"))
 }
 
-pub fn zircon_build_path(options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn zircon_build_path(options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     let fuchsia_dir = fuchsia_dir(options)?;
     let build_name = if options.target_cpu == X64 {
         "build-x64"
@@ -154,7 +154,7 @@ pub fn zircon_build_path(options: &TargetOptions) -> Result<PathBuf, Error> {
     Ok(zircon_build)
 }
 
-pub fn shared_libraries_path(options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn shared_libraries_path(options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     let shared_name = if options.target_cpu == X64 {
         "x64-shared"
     } else {
@@ -163,14 +163,14 @@ pub fn shared_libraries_path(options: &TargetOptions) -> Result<PathBuf, Error> 
     Ok(target_out_dir(&options)?.join(shared_name))
 }
 
-fn buildtools_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+fn buildtools_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     let platform_name = if is_mac() { "mac-x64" } else { "linux-x64" };
     Ok(fuchsia_dir(target_options)?
         .join("buildtools")
         .join(platform_name))
 }
 
-pub fn cargo_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn cargo_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     if let Some(cargo_path) = get_path_from_env("FARGO_CARGO", false)? {
         Ok(cargo_path)
     } else {
@@ -178,7 +178,7 @@ pub fn cargo_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
     }
 }
 
-pub fn rustc_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn rustc_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     if let Some(rustc_path) = get_path_from_env("FARGO_RUSTC", false)? {
         Ok(rustc_path)
     } else {
@@ -186,7 +186,7 @@ pub fn rustc_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
     }
 }
 
-pub fn rustdoc_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn rustdoc_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     if let Some(rustdoc_path) = get_path_from_env("FARGO_RUSTDOC", false)? {
         Ok(rustdoc_path)
     } else {
@@ -194,33 +194,33 @@ pub fn rustdoc_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
     }
 }
 
-pub fn toolchain_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn toolchain_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     Ok(buildtools_path(target_options)?.join("clang"))
 }
 
-pub fn clang_linker_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn clang_linker_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     Ok(toolchain_path(target_options)?.join("bin").join("clang"))
 }
 
-pub fn clang_c_compiler_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn clang_c_compiler_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     Ok(toolchain_path(target_options)?.join("bin").join("clang"))
 }
 
-pub fn clang_cpp_compiler_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn clang_cpp_compiler_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     Ok(toolchain_path(target_options)?.join("bin").join("clang++"))
 }
 
-pub fn clang_archiver_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn clang_archiver_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     Ok(toolchain_path(target_options)?.join("bin").join("llvm-ar"))
 }
 
-pub fn clang_ranlib_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn clang_ranlib_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     Ok(toolchain_path(target_options)?
         .join("bin")
         .join("llvm-ranlib"))
 }
 
-pub fn fx_path(target_options: &TargetOptions) -> Result<PathBuf, Error> {
+pub fn fx_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     let fuchsia_dir = fuchsia_dir(target_options)?;
     Ok(fuchsia_dir.join("scripts/fx"))
 }
@@ -234,7 +234,7 @@ pub struct FuchsiaConfig {
 }
 
 impl FuchsiaConfig {
-    pub fn new(target_options: &TargetOptions) -> Result<FuchsiaConfig, Error> {
+    pub fn new(target_options: &TargetOptions<'_, '_>) -> Result<FuchsiaConfig, Error> {
         let mut config = FuchsiaConfig {
             fuchsia_build_dir: String::from(""),
             fuchsia_variant: String::from(""),

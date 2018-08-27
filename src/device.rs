@@ -2,15 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use failure::{err_msg, Error, ResultExt};
-use sdk::{fuchsia_dir, fx_path, target_out_dir, TargetOptions};
+use crate::sdk::{fuchsia_dir, fx_path, target_out_dir, TargetOptions};
+use crate::utils::is_mac;
+use failure::{bail, err_msg, Error, ResultExt};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::{str, thread, time};
-use utils::is_mac;
 
-pub fn netaddr(verbose: bool, target_options: &TargetOptions) -> Result<String, Error> {
+pub fn netaddr(verbose: bool, target_options: &TargetOptions<'_, '_>) -> Result<String, Error> {
     let fuchsia_dir = fuchsia_dir(target_options)?;
     let netaddr_binary = fuchsia_dir.join("out/build-zircon/tools/netaddr");
     let mut args = vec!["--fuchsia"];
@@ -42,7 +42,7 @@ pub fn netaddr(verbose: bool, target_options: &TargetOptions) -> Result<String, 
     Ok(result)
 }
 
-pub fn netls(verbose: bool, target_options: &TargetOptions) -> Result<(), Error> {
+pub fn netls(verbose: bool, target_options: &TargetOptions<'_, '_>) -> Result<(), Error> {
     let fuchsia_dir = fuchsia_dir(target_options)?;
     let netls_binary = fuchsia_dir.join("out/build-zircon/tools/netls");
     let mut netls_command = Command::new(netls_binary);
@@ -67,7 +67,7 @@ static SSH_OPTIONS: &'static [&str] = &[
 ];
 
 pub fn scp_to_device(
-    verbose: bool, target_options: &TargetOptions, netaddr: &str, source_path: &PathBuf,
+    verbose: bool, target_options: &TargetOptions<'_, '_>, netaddr: &str, source_path: &PathBuf,
     destination_path: &str,
 ) -> Result<(), Error> {
     let destination_with_address = format!("[{}]:{}", netaddr, destination_path);
@@ -104,7 +104,9 @@ pub fn scp_to_device(
     Ok(())
 }
 
-pub fn ssh(verbose: bool, target_options: &TargetOptions, command: &str) -> Result<(), Error> {
+pub fn ssh(
+    verbose: bool, target_options: &TargetOptions<'_, '_>, command: &str,
+) -> Result<(), Error> {
     let netaddr = netaddr(verbose, target_options)?;
     let ssh_config = target_out_dir(target_options)?.join("ssh-keys/ssh_config");
     if !ssh_config.exists() {
@@ -235,7 +237,7 @@ pub struct StartEmulatorOptions {
 }
 
 pub fn start_emulator(
-    options: &StartEmulatorOptions, params: &[&str], target_options: &TargetOptions,
+    options: &StartEmulatorOptions, params: &[&str], target_options: &TargetOptions<'_, '_>,
 ) -> Result<(), Error> {
     let fuchsia_dir = fuchsia_dir(target_options)?;
     let fx_script = fx_path(target_options)?;

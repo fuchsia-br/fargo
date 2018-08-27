@@ -1,7 +1,10 @@
+cargo-features = ["edition"]
+
 [package]
 name = "fargo"
 version = "0.2.0"
 authors = ["Rob Tsuk <robtsuk@google.com>"]
+edition = "2018"
 
 [dependencies]
 clap = "2"

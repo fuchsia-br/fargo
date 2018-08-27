@@ -85,7 +85,8 @@ fn main() {
         "https://crates.io/api/v1/crates?page=1&per_page=",
         &format!("{}", num),
         "&sort=downloads",
-    ].join("")
+    ]
+        .join("")
         .into();
 
     if verbose {
@@ -153,8 +154,7 @@ fn main() {
                     TestResult::Failure
                 },
             }
-        })
-        .collect();
+        }).collect();
 
     let (succ, fail, excl) = results.into_iter().fold(
         (Vec::new(), Vec::new(), Vec::new()),

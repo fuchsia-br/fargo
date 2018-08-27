@@ -8,35 +8,32 @@
 
 #![recursion_limit = "1024"]
 
-extern crate clap;
-#[macro_use]
-extern crate failure;
-extern crate toml;
-extern crate uname;
-
 mod cross;
 mod device;
 mod sdk;
 mod utils;
 
+pub use crate::sdk::TargetOptions;
+
+use crate::cross::{pkg_config_path, run_configure, run_pkg_config};
+use crate::device::{enable_networking, netaddr, netls, scp_to_device, ssh, start_emulator,
+                    stop_emulator, StartEmulatorOptions};
+use crate::sdk::{cargo_out_dir, cargo_path, clang_archiver_path, clang_c_compiler_path,
+                 clang_cpp_compiler_path, clang_linker_path, clang_ranlib_path, rustc_path,
+                 rustdoc_path, shared_libraries_path, sysroot_path, zircon_build_path,
+                 FuchsiaConfig};
+use crate::utils::strip_binary;
+
 use clap::{App, AppSettings, Arg, SubCommand};
-use cross::{pkg_config_path, run_configure, run_pkg_config};
-use device::{enable_networking, netaddr, netls, scp_to_device, ssh, start_emulator, stop_emulator,
-             StartEmulatorOptions};
-use failure::{err_msg, Error, ResultExt};
-pub use sdk::TargetOptions;
-use sdk::{cargo_out_dir, cargo_path, clang_archiver_path, clang_c_compiler_path,
-          clang_cpp_compiler_path, clang_linker_path, clang_ranlib_path, rustc_path, rustdoc_path,
-          shared_libraries_path, sysroot_path, zircon_build_path, FuchsiaConfig};
+use failure::{bail, err_msg, Error, ResultExt};
 use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use utils::strip_binary;
 
 fn copy_to_target(
-    source_path: &PathBuf, verbose: bool, target_options: &TargetOptions,
+    source_path: &PathBuf, verbose: bool, target_options: &TargetOptions<'_, '_>,
 ) -> Result<String, Error> {
     let netaddr = netaddr(verbose, target_options)?;
     if verbose {
@@ -62,7 +59,7 @@ fn copy_to_target(
 }
 
 fn run_program_on_target(
-    filename: &str, verbose: bool, target_options: &TargetOptions, run_with_tiles: bool,
+    filename: &str, verbose: bool, target_options: &TargetOptions<'_, '_>, run_with_tiles: bool,
     params: &[&str], test_args: Option<&str>,
 ) -> Result<(), Error> {
     let source_path = PathBuf::from(&filename);
@@ -95,7 +92,7 @@ use std::sync::mpsc::channel;
 use std::time::Duration;
 
 fn autotest(
-    run_cargo_options: &RunCargoOptions, target_options: &TargetOptions,
+    run_cargo_options: &RunCargoOptions, target_options: &TargetOptions<'_, '_>,
 ) -> Result<(), Error> {
     let (tx, rx) = channel();
     let mut watcher: RecommendedWatcher =
@@ -131,7 +128,7 @@ fn autotest(
 }
 
 fn build_tests(
-    run_cargo_options: &RunCargoOptions, target_options: &TargetOptions, test_target: &str,
+    run_cargo_options: &RunCargoOptions, target_options: &TargetOptions<'_, '_>, test_target: &str,
 ) -> Result<bool, Error> {
     run_tests(
         run_cargo_options,
@@ -145,7 +142,7 @@ fn build_tests(
 }
 
 fn run_tests(
-    run_cargo_options: &RunCargoOptions, no_run: bool, target_options: &TargetOptions,
+    run_cargo_options: &RunCargoOptions, no_run: bool, target_options: &TargetOptions<'_, '_>,
     test_target: &str, params: &[&str], target_params: Option<&str>,
 ) -> Result<(), Error> {
     let mut args = vec![];
@@ -181,7 +178,7 @@ fn run_tests(
 }
 
 fn build_binary(
-    run_cargo_options: &RunCargoOptions, target_options: &TargetOptions, params: &[&str],
+    run_cargo_options: &RunCargoOptions, target_options: &TargetOptions<'_, '_>, params: &[&str],
 ) -> Result<(), Error> {
     run_cargo(
         run_cargo_options,
@@ -194,7 +191,7 @@ fn build_binary(
 }
 
 fn check_binary(
-    run_cargo_options: &RunCargoOptions, target_options: &TargetOptions, params: &[&str],
+    run_cargo_options: &RunCargoOptions, target_options: &TargetOptions<'_, '_>, params: &[&str],
 ) -> Result<(), Error> {
     run_cargo(
         run_cargo_options,
@@ -207,14 +204,15 @@ fn check_binary(
 }
 
 fn run_binary(
-    run_cargo_options: &RunCargoOptions, target_options: &TargetOptions, params: &[&str],
+    run_cargo_options: &RunCargoOptions, target_options: &TargetOptions<'_, '_>, params: &[&str],
 ) -> Result<(), Error> {
     run_cargo(run_cargo_options, "run", params, target_options, None, None)?;
     Ok(())
 }
 
 fn build_doc(
-    run_cargo_options: &RunCargoOptions, target_options: &TargetOptions, no_deps: bool, open: bool,
+    run_cargo_options: &RunCargoOptions, target_options: &TargetOptions<'_, '_>, no_deps: bool,
+    open: bool,
 ) -> Result<(), Error> {
     let mut args = vec![];
     if no_deps {
@@ -227,7 +225,7 @@ fn build_doc(
 }
 
 fn load_driver(
-    run_cargo_options: &RunCargoOptions, target_options: &TargetOptions,
+    run_cargo_options: &RunCargoOptions, target_options: &TargetOptions<'_, '_>,
 ) -> Result<(), Error> {
     let args = vec![];
     run_cargo(
@@ -315,7 +313,7 @@ impl RunCargoOptions {
     }
 }
 
-fn get_triple_cpu(target_options: &TargetOptions) -> String {
+fn get_triple_cpu(target_options: &TargetOptions<'_, '_>) -> String {
     if (target_options.target_cpu) == X64 {
         "x86_64"
     } else {
@@ -323,14 +321,14 @@ fn get_triple_cpu(target_options: &TargetOptions) -> String {
     }.to_string()
 }
 
-fn get_target_triple(target_options: &TargetOptions) -> String {
+fn get_target_triple(target_options: &TargetOptions<'_, '_>) -> String {
     let triple_cpu = get_triple_cpu(target_options);
 
     format!("{}-fuchsia", triple_cpu)
 }
 
 fn get_rustflags(
-    target_options: &TargetOptions, sysroot_as_path: &PathBuf,
+    target_options: &TargetOptions<'_, '_>, sysroot_as_path: &PathBuf,
 ) -> Result<String, Error> {
     Ok(format!(
         "-C link-arg=--target={} -C link-arg=--sysroot={} -Lnative={}",
@@ -341,7 +339,7 @@ fn get_rustflags(
 }
 
 fn make_fargo_command(
-    runner: Option<PathBuf>, options: &RunCargoOptions, target_options: &TargetOptions,
+    runner: Option<PathBuf>, options: &RunCargoOptions, target_options: &TargetOptions<'_, '_>,
     additional_target_args: Option<&str>,
 ) -> Result<String, Error> {
     let tiles_arg = format!("--{}", TILES);
@@ -419,8 +417,9 @@ fn convert_manifest_path(possible_path: &Option<&str>) -> Option<PathBuf> {
 /// );
 /// ```
 pub fn run_cargo(
-    options: &RunCargoOptions, subcommand: &str, args: &[&str], target_options: &TargetOptions,
-    runner: Option<PathBuf>, additional_target_args: Option<&str>,
+    options: &RunCargoOptions, subcommand: &str, args: &[&str],
+    target_options: &TargetOptions<'_, '_>, runner: Option<PathBuf>,
+    additional_target_args: Option<&str>,
 ) -> Result<(), Error> {
     if options.verbose {
         println!("target_options = {:?}", target_options);
@@ -541,7 +540,9 @@ pub fn run_cargo(
     Ok(())
 }
 
-fn write_config(options: &RunCargoOptions, target_options: &TargetOptions) -> Result<(), Error> {
+fn write_config(
+    options: &RunCargoOptions, target_options: &TargetOptions<'_, '_>,
+) -> Result<(), Error> {
     let cargo_dir_path = Path::new(".cargo");
     if cargo_dir_path.exists() {
         if !cargo_dir_path.is_dir() {
