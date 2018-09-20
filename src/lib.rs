@@ -67,6 +67,7 @@ fn run_program_on_target(
     let destination_path = copy_to_target(&stripped_source_path, verbose, target_options)?;
     let mut command_string = (match run_mode {
         RunMode::Tiles => "tiles_ctl add ",
+        RunMode::Ermine => "ermine_ctl add ",
         RunMode::Run => "run ",
         RunMode::Normal => "",
     }).to_string();
@@ -261,13 +262,16 @@ pub enum RunMode {
     Normal,
     Run,
     Tiles,
+    Ermine,
 }
 
-fn run_switches_to_mode(tiles: bool, run: bool) -> RunMode {
+fn run_switches_to_mode(tiles: bool, run: bool, ermine: bool) -> RunMode {
     if tiles {
         RunMode::Tiles
     } else if run {
         RunMode::Run
+    } else if ermine {
+        RunMode::Ermine
     } else {
         RunMode::Normal
     }
@@ -364,6 +368,7 @@ fn make_fargo_command(
     additional_target_args: Option<&str>,
 ) -> Result<String, Error> {
     let tiles_arg = format!("--{}", TILES);
+    let ermine_arg = format!("--{}", ERMINE);
     let run_arg = format!("--{}", RUN);
 
     let fargo_path = if runner.is_some() {
@@ -396,6 +401,7 @@ fn make_fargo_command(
     match options.run_mode {
         RunMode::Normal => (),
         RunMode::Tiles => runner_args.push(&tiles_arg),
+        RunMode::Ermine => runner_args.push(&ermine_arg),
         RunMode::Run => runner_args.push(&run_arg),
     }
 
@@ -616,6 +622,7 @@ fn write_config(
 
 static TILES: &str = "run-with-tiles";
 static RUN: &str = "run-with-run";
+static ERMINE: &str = "run-with-ermine";
 
 static CHECK: &str = "check";
 static RELEASE: &str = "release";
@@ -770,6 +777,10 @@ pub fn run() -> Result<(), Error> {
                         .help("Use tiles_ctl add to run binary."),
                 ).arg(Arg::with_name(RUN).long(RUN).help("Use run to run binary."))
                 .arg(
+                    Arg::with_name(ERMINE)
+                        .long(ERMINE)
+                        .help("Use ermine_ctl to run binary."),
+                ).arg(
                     Arg::with_name("example")
                         .long("example")
                         .value_name("example")
@@ -839,6 +850,10 @@ pub fn run() -> Result<(), Error> {
                         .help("Use tiles to run binary."),
                 ).arg(Arg::with_name(RUN).long(RUN).help("Use run to run binary."))
                 .arg(
+                    Arg::with_name(ERMINE)
+                        .long(ERMINE)
+                        .help("Use ermine_ctl to run binary."),
+                ).arg(
                     Arg::with_name("run_on_target_params")
                         .index(1)
                         .multiple(true),
@@ -970,8 +985,11 @@ pub fn run() -> Result<(), Error> {
         }
 
         let manifest_path = convert_manifest_path(&run_matches.value_of(MANIFEST_PATH));
-        let run_mode =
-            run_switches_to_mode(run_matches.is_present(TILES), run_matches.is_present(RUN));
+        let run_mode = run_switches_to_mode(
+            run_matches.is_present(TILES),
+            run_matches.is_present(RUN),
+            run_matches.is_present(ERMINE),
+        );
         return run_binary(
             &run_cargo_options
                 .release(run_matches.is_present(RELEASE))
@@ -1107,6 +1125,7 @@ pub fn run() -> Result<(), Error> {
         let run_mode = run_switches_to_mode(
             run_on_target_matches.is_present(TILES),
             run_on_target_matches.is_present(RUN),
+            run_on_target_matches.is_present(ERMINE),
         );
         return run_program_on_target(program, verbose, &target_options, run_mode, args, test_args);
     }
