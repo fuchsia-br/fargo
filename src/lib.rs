@@ -355,12 +355,17 @@ fn get_target_triple(target_options: &TargetOptions<'_, '_>) -> String {
 fn get_rustflags(
     target_options: &TargetOptions<'_, '_>, sysroot_as_path: &PathBuf,
 ) -> Result<String, Error> {
-    Ok(format!(
-        "-C link-arg=--target={} -C link-arg=--sysroot={} -Lnative={}",
-        get_target_triple(target_options),
-        sysroot_as_path.to_str().unwrap(),
-        shared_libraries_path(target_options)?.to_str().unwrap(),
-    ))
+    let mut rust_flags = vec![
+        format!("-C link-arg=--target={}", get_target_triple(target_options)),
+        format!("-C link-arg=--sysroot={}", sysroot_as_path.to_str().unwrap()),
+        format!("-Lnative={}", shared_libraries_path(target_options)?.to_str().unwrap()),
+        "-C link-arg=--Wl,--threads".to_string(),
+        "-Clink-arg=-Wl,--pack-dyn-relocs=relr".to_string(),
+    ];
+    if get_triple_cpu(target_options) == "aarch64" {
+        rust_flags.push("-Clink-arg=-Wl,--fix-cortex-a53-843419".to_string());
+    }
+    Ok(rust_flags.join(" "))
 }
 
 fn make_fargo_command(
