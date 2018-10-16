@@ -22,7 +22,7 @@ use crate::sdk::{cargo_out_dir, cargo_path, clang_archiver_path, clang_c_compile
                  clang_cpp_compiler_path, clang_linker_path, clang_ranlib_path, rustc_path,
                  rustdoc_path, shared_libraries_path, sysroot_path, zircon_build_path,
                  FuchsiaConfig};
-use crate::utils::strip_binary;
+use crate::utils::{is_mac, strip_binary};
 
 use clap::{App, AppSettings, Arg, SubCommand};
 use failure::{bail, err_msg, Error, ResultExt};
@@ -70,7 +70,8 @@ fn run_program_on_target(
         RunMode::Ermine => "ermine_ctl add ",
         RunMode::Run => "run ",
         RunMode::Normal => "",
-    }).to_string();
+    })
+    .to_string();
     command_string.push_str(&destination_path);
     for param in params {
         command_string.push(' ');
@@ -343,7 +344,8 @@ fn get_triple_cpu(target_options: &TargetOptions<'_, '_>) -> String {
         "x86_64"
     } else {
         "aarch64"
-    }.to_string()
+    }
+    .to_string()
 }
 
 fn get_target_triple(target_options: &TargetOptions<'_, '_>) -> String {
@@ -357,11 +359,19 @@ fn get_rustflags(
 ) -> Result<String, Error> {
     let mut rust_flags = vec![
         format!("-C link-arg=--target={}", get_target_triple(target_options)),
-        format!("-C link-arg=--sysroot={}", sysroot_as_path.to_str().unwrap()),
-        format!("-Lnative={}", shared_libraries_path(target_options)?.to_str().unwrap()),
-        "-C link-arg=--Wl,--threads".to_string(),
+        format!(
+            "-C link-arg=--sysroot={}",
+            sysroot_as_path.to_str().unwrap()
+        ),
+        format!(
+            "-Lnative={}",
+            shared_libraries_path(target_options)?.to_str().unwrap()
+        ),
         "-Clink-arg=-Wl,--pack-dyn-relocs=relr".to_string(),
     ];
+    if !is_mac() {
+        rust_flags.push("-C link-arg=--Wl,--threads".to_string());
+    }
     if get_triple_cpu(target_options) == "aarch64" {
         rust_flags.push("-Clink-arg=-Wl,--fix-cortex-a53-843419".to_string());
     }
@@ -520,16 +530,19 @@ pub fn run_cargo(
         .env(
             rustflags_env_name,
             get_rustflags(target_options, &sysroot_as_path)?,
-        ).env(
+        )
+        .env(
             linker_env_name,
             clang_linker_path(target_options)?.to_str().unwrap(),
-        ).env("RUSTC", rustc_path(target_options)?.to_str().unwrap())
+        )
+        .env("RUSTC", rustc_path(target_options)?.to_str().unwrap())
         .env("RUSTDOC", rustdoc_path(target_options)?.to_str().unwrap())
         .env("RUSTDOCFLAGS", "--cap-lints allow -Z unstable-options")
         .env(
             "FUCHSIA_SHARED_ROOT",
             shared_libraries_path(target_options)?,
-        ).env("ZIRCON_BUILD_ROOT", zircon_build_path(target_options)?)
+        )
+        .env("ZIRCON_BUILD_ROOT", zircon_build_path(target_options)?)
         .arg(subcommand)
         .args(target_args)
         .args(args);
@@ -547,17 +560,21 @@ pub fn run_cargo(
         cmd.env(
             cc_env_name,
             clang_c_compiler_path(target_options)?.to_str().unwrap(),
-        ).env(
+        )
+        .env(
             cxx_env_name,
             clang_cpp_compiler_path(target_options)?.to_str().unwrap(),
-        ).env(cflags_env_name, format!("--sysroot={}", sysroot_as_str))
+        )
+        .env(cflags_env_name, format!("--sysroot={}", sysroot_as_str))
         .env(
             ar_env_name,
             clang_archiver_path(target_options)?.to_str().unwrap(),
-        ).env(
+        )
+        .env(
             "RANLIB",
             clang_ranlib_path(target_options)?.to_str().unwrap(),
-        ).env("PKG_CONFIG_ALL_STATIC", "1")
+        )
+        .env("PKG_CONFIG_ALL_STATIC", "1")
         .env("PKG_CONFIG_ALLOW_CROSS", "1")
         .env("PKG_CONFIG_PATH", "")
         .env("PKG_CONFIG_LIBDIR", pkg_path);
@@ -663,224 +680,261 @@ static RUN_ON_TARGET: &str = "run-on-target";
 
 #[doc(hidden)]
 pub fn run() -> Result<(), Error> {
-    let matches = App::new("fargo")
-        .version("v0.2.0")
-        .setting(AppSettings::GlobalVersion)
-        .about("Fargo is a prototype Fuchsia-specific wrapper around Cargo")
-        .arg(
-            Arg::with_name("verbose")
-                .long("verbose")
-                .short("v")
-                .help("Print verbose output while performing commands"),
-        ).arg(
-            Arg::with_name("debug-os")
-                .long("debug-os")
-                .help("Use debug user.bootfs and ssh keys"),
-        ).arg(
-            Arg::with_name(DISABLE_CROSS_ENV)
-                .long(DISABLE_CROSS_ENV)
-                .help("Disable the setting of CC, AR and such environmental variables."),
-        ).arg(
-            Arg::with_name(TARGET_CPU)
-                .long(TARGET_CPU)
-                .short("T")
-                .value_name(TARGET_CPU)
-                .default_value(X64)
-                .possible_values(&[X64, ARM64])
-                .help("Architecture of target device"),
-        ).arg(
-            Arg::with_name("device-name")
-                .long("device-name")
-                .short("N")
-                .value_name("device-name")
-                .help(
-                    "Name of device to target, needed if there are multiple devices visible on \
-                     the network",
-                ),
-        ).arg(
-            Arg::with_name(MANIFEST_PATH)
-                .long(MANIFEST_PATH)
-                .value_name(MANIFEST_PATH)
-                .global(true)
-                .help("Path to Cargo.toml"),
-        ).subcommand(
-            SubCommand::with_name("autotest")
-                .about("Auto build and test in Fuchsia device or emulator")
-                .arg(Arg::with_name(RELEASE).long(RELEASE).help("Build release")),
-        ).subcommand(
-            SubCommand::with_name("build-tests")
-                .about("Build tests for Fuchsia device or emulator")
-                .arg(
-                    Arg::with_name("test")
-                        .long("test")
-                        .value_name("test")
-                        .help("Test only the specified test target"),
-                ).arg(Arg::with_name(RELEASE).long(RELEASE).help("Build release")),
-        ).subcommand(
-            SubCommand::with_name("test")
-                .about("Run unit tests on Fuchsia device or emulator")
-                .arg(Arg::with_name(RELEASE).long(RELEASE).help(RELEASE_HELP))
-                .arg(
-                    Arg::with_name("test")
-                        .long("test")
-                        .value_name("test")
-                        .help("Test only the specified test target"),
-                ).arg(
-                    Arg::with_name("test_args")
-                        .long("args")
-                        .value_name("args")
-                        .help("arguments to pass to the test runner"),
-                ).arg(Arg::with_name("test_params").index(1).multiple(true)),
-        ).subcommand(
-            SubCommand::with_name("build")
-                .about("Build binary targeting Fuchsia device or emulator")
-                .arg(Arg::with_name(RELEASE).long(RELEASE).help(RELEASE_HELP))
-                .arg(
-                    Arg::with_name("example")
-                        .long("example")
-                        .takes_value(true)
-                        .help("Build a specific example from the examples/ dir."),
-                ).arg(
-                    Arg::with_name("examples")
-                        .long("examples")
-                        .help("Build all examples in the examples/ dir."),
-                ),
-        ).subcommand(
-            SubCommand::with_name(CHECK)
-                .about("Check binary targeting Fuchsia device or emulator")
-                .arg(Arg::with_name(RELEASE).long(RELEASE).help(RELEASE_HELP))
-                .arg(
-                    Arg::with_name(EXAMPLE)
-                        .long(EXAMPLE)
-                        .takes_value(true)
-                        .help("Check a specific example from the examples/ dir."),
-                ).arg(
-                    Arg::with_name(EXAMPLES)
-                        .long(EXAMPLES)
-                        .help("Check all examples in the examples/ dir."),
-                ),
-        ).subcommand(
-            SubCommand::with_name(DOC)
-                .about("Build a package's documentation")
-                .arg(Arg::with_name(RELEASE).long(RELEASE).help(RELEASE_HELP))
-                .arg(
-                    Arg::with_name(DOC_NO_DEPS)
-                        .long(DOC_NO_DEPS)
-                        .help("Don't build documentation for dependencies"),
-                ).arg(
-                    Arg::with_name(DOC_OPEN)
-                        .long(DOC_OPEN)
-                        .help("Opens the docs in a browser after the operation"),
-                ),
-        ).subcommand(
-            SubCommand::with_name("run")
-                .about("Run binary on Fuchsia device or emulator")
-                .arg(Arg::with_name(RELEASE).long(RELEASE).help(RELEASE_HELP))
-                .arg(
-                    Arg::with_name(TILES)
-                        .long(TILES)
-                        .help("Use tiles_ctl add to run binary."),
-                ).arg(Arg::with_name(RUN).long(RUN).help("Use run to run binary."))
-                .arg(
-                    Arg::with_name(ERMINE)
-                        .long(ERMINE)
-                        .help("Use ermine_ctl to run binary."),
-                ).arg(
-                    Arg::with_name("example")
-                        .long("example")
-                        .value_name("example")
-                        .help("Run a specific example from the examples/ dir."),
-                ),
-        ).subcommand(
-            SubCommand::with_name("load-driver")
-                .about("Build driver and load it on Fuchsia device or emulator.")
-                .arg(Arg::with_name(RELEASE).long(RELEASE).help("Build release")),
-        ).subcommand(SubCommand::with_name("list-devices").about("List visible Fuchsia devices"))
-        .subcommand(
-            SubCommand::with_name(START)
-                .about("Start a Fuchsia emulator")
-                .arg(
-                    Arg::with_name(GRAPHICS)
-                        .short("g")
-                        .help("Start a simulator with graphics enabled"),
-                ).arg(
-                    Arg::with_name(DISABLE_VIRTCON).long(DISABLE_VIRTCON).help(
-                        "Do not launch the virtual console service if this option is present",
+    let matches =
+        App::new("fargo")
+            .version("v0.2.0")
+            .setting(AppSettings::GlobalVersion)
+            .about("Fargo is a prototype Fuchsia-specific wrapper around Cargo")
+            .arg(
+                Arg::with_name("verbose")
+                    .long("verbose")
+                    .short("v")
+                    .help("Print verbose output while performing commands"),
+            )
+            .arg(
+                Arg::with_name("debug-os")
+                    .long("debug-os")
+                    .help("Use debug user.bootfs and ssh keys"),
+            )
+            .arg(
+                Arg::with_name(DISABLE_CROSS_ENV)
+                    .long(DISABLE_CROSS_ENV)
+                    .help("Disable the setting of CC, AR and such environmental variables."),
+            )
+            .arg(
+                Arg::with_name(TARGET_CPU)
+                    .long(TARGET_CPU)
+                    .short("T")
+                    .value_name(TARGET_CPU)
+                    .default_value(X64)
+                    .possible_values(&[X64, ARM64])
+                    .help("Architecture of target device"),
+            )
+            .arg(
+                Arg::with_name("device-name")
+                    .long("device-name")
+                    .short("N")
+                    .value_name("device-name")
+                    .help(
+                        "Name of device to target, needed if there are multiple devices visible \
+                         on the network",
                     ),
-                ).arg(
-                    Arg::with_name(NO_NET)
-                        .long(NO_NET)
-                        .help("Don't set up networking."),
-                ).arg(Arg::with_name(FX_RUN_PARAMS).index(1).multiple(true)),
-        ).subcommand(SubCommand::with_name("stop").about("Stop all Fuchsia emulators"))
-        .subcommand(
-            SubCommand::with_name("enable-networking")
-                .about("Enable networking for a running emulator"),
-        ).subcommand(
-            SubCommand::with_name(RESTART)
-                .about("Stop all Fuchsia emulators and start a new one")
-                .arg(
-                    Arg::with_name(GRAPHICS)
-                        .short("g")
-                        .help("Start a simulator with graphics enabled"),
-                ).arg(
-                    Arg::with_name(DISABLE_VIRTCON).long(DISABLE_VIRTCON).help(
-                        "Do not launch the virtual console service if this option is present",
+            )
+            .arg(
+                Arg::with_name(MANIFEST_PATH)
+                    .long(MANIFEST_PATH)
+                    .value_name(MANIFEST_PATH)
+                    .global(true)
+                    .help("Path to Cargo.toml"),
+            )
+            .subcommand(
+                SubCommand::with_name("autotest")
+                    .about("Auto build and test in Fuchsia device or emulator")
+                    .arg(Arg::with_name(RELEASE).long(RELEASE).help("Build release")),
+            )
+            .subcommand(
+                SubCommand::with_name("build-tests")
+                    .about("Build tests for Fuchsia device or emulator")
+                    .arg(
+                        Arg::with_name("test")
+                            .long("test")
+                            .value_name("test")
+                            .help("Test only the specified test target"),
+                    )
+                    .arg(Arg::with_name(RELEASE).long(RELEASE).help("Build release")),
+            )
+            .subcommand(
+                SubCommand::with_name("test")
+                    .about("Run unit tests on Fuchsia device or emulator")
+                    .arg(Arg::with_name(RELEASE).long(RELEASE).help(RELEASE_HELP))
+                    .arg(
+                        Arg::with_name("test")
+                            .long("test")
+                            .value_name("test")
+                            .help("Test only the specified test target"),
+                    )
+                    .arg(
+                        Arg::with_name("test_args")
+                            .long("args")
+                            .value_name("args")
+                            .help("arguments to pass to the test runner"),
+                    )
+                    .arg(Arg::with_name("test_params").index(1).multiple(true)),
+            )
+            .subcommand(
+                SubCommand::with_name("build")
+                    .about("Build binary targeting Fuchsia device or emulator")
+                    .arg(Arg::with_name(RELEASE).long(RELEASE).help(RELEASE_HELP))
+                    .arg(
+                        Arg::with_name("example")
+                            .long("example")
+                            .takes_value(true)
+                            .help("Build a specific example from the examples/ dir."),
+                    )
+                    .arg(
+                        Arg::with_name("examples")
+                            .long("examples")
+                            .help("Build all examples in the examples/ dir."),
                     ),
-                ).arg(
-                    Arg::with_name(NO_NET)
-                        .long(NO_NET)
-                        .help("Don't set up networking."),
-                ).arg(Arg::with_name(FX_RUN_PARAMS).index(1).multiple(true)),
-        ).subcommand(
-            SubCommand::with_name("ssh").about("Open a shell on Fuchsia device or emulator"),
-        ).subcommand(
-            SubCommand::with_name("cargo")
-                .about(
-                    "Run a cargo command for Fuchsia. Use -- to indicate that all following \
-                     arguments should be passed to cargo.",
-                ).arg(Arg::with_name(SUBCOMMAND).required(true))
-                .arg(Arg::with_name("cargo_params").index(2).multiple(true)),
-        ).subcommand(
-            SubCommand::with_name(RUN_ON_TARGET)
-                .about("Act as a test runner for cargo")
-                .arg(
-                    Arg::with_name("test_args")
-                        .long("args")
-                        .value_name("args")
-                        .help("arguments to pass to the test runner"),
-                ).arg(
-                    Arg::with_name(TILES)
-                        .long(TILES)
-                        .help("Use tiles to run binary."),
-                ).arg(Arg::with_name(RUN).long(RUN).help("Use run to run binary."))
-                .arg(
-                    Arg::with_name(ERMINE)
-                        .long(ERMINE)
-                        .help("Use ermine_ctl to run binary."),
-                ).arg(
-                    Arg::with_name("run_on_target_params")
-                        .index(1)
-                        .multiple(true),
-                ).setting(AppSettings::Hidden),
-        ).subcommand(
-            SubCommand::with_name("pkg-config")
-                .about("Run pkg-config for the cross compilation environment")
-                .arg(Arg::with_name("pkgconfig_param").index(1).multiple(true)),
-        ).subcommand(
-            SubCommand::with_name("configure")
-                .about("Run a configure script for the cross compilation environment")
-                .arg(Arg::with_name("configure_param").index(1).multiple(true))
-                .arg(
-                    Arg::with_name("no-host")
-                        .long("no-host")
-                        .help("Don't pass --host to configure"),
-                ),
-        ).subcommand(
-            SubCommand::with_name(WRITE_CONFIG).about(
+            )
+            .subcommand(
+                SubCommand::with_name(CHECK)
+                    .about("Check binary targeting Fuchsia device or emulator")
+                    .arg(Arg::with_name(RELEASE).long(RELEASE).help(RELEASE_HELP))
+                    .arg(
+                        Arg::with_name(EXAMPLE)
+                            .long(EXAMPLE)
+                            .takes_value(true)
+                            .help("Check a specific example from the examples/ dir."),
+                    )
+                    .arg(
+                        Arg::with_name(EXAMPLES)
+                            .long(EXAMPLES)
+                            .help("Check all examples in the examples/ dir."),
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name(DOC)
+                    .about("Build a package's documentation")
+                    .arg(Arg::with_name(RELEASE).long(RELEASE).help(RELEASE_HELP))
+                    .arg(
+                        Arg::with_name(DOC_NO_DEPS)
+                            .long(DOC_NO_DEPS)
+                            .help("Don't build documentation for dependencies"),
+                    )
+                    .arg(
+                        Arg::with_name(DOC_OPEN)
+                            .long(DOC_OPEN)
+                            .help("Opens the docs in a browser after the operation"),
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name("run")
+                    .about("Run binary on Fuchsia device or emulator")
+                    .arg(Arg::with_name(RELEASE).long(RELEASE).help(RELEASE_HELP))
+                    .arg(
+                        Arg::with_name(TILES)
+                            .long(TILES)
+                            .help("Use tiles_ctl add to run binary."),
+                    )
+                    .arg(Arg::with_name(RUN).long(RUN).help("Use run to run binary."))
+                    .arg(
+                        Arg::with_name(ERMINE)
+                            .long(ERMINE)
+                            .help("Use ermine_ctl to run binary."),
+                    )
+                    .arg(
+                        Arg::with_name("example")
+                            .long("example")
+                            .value_name("example")
+                            .help("Run a specific example from the examples/ dir."),
+                    ),
+            )
+            .subcommand(
+                SubCommand::with_name("load-driver")
+                    .about("Build driver and load it on Fuchsia device or emulator.")
+                    .arg(Arg::with_name(RELEASE).long(RELEASE).help("Build release")),
+            )
+            .subcommand(SubCommand::with_name("list-devices").about("List visible Fuchsia devices"))
+            .subcommand(
+                SubCommand::with_name(START)
+                    .about("Start a Fuchsia emulator")
+                    .arg(
+                        Arg::with_name(GRAPHICS)
+                            .short("g")
+                            .help("Start a simulator with graphics enabled"),
+                    )
+                    .arg(Arg::with_name(DISABLE_VIRTCON).long(DISABLE_VIRTCON).help(
+                        "Do not launch the virtual console service if this option is present",
+                    ))
+                    .arg(
+                        Arg::with_name(NO_NET)
+                            .long(NO_NET)
+                            .help("Don't set up networking."),
+                    )
+                    .arg(Arg::with_name(FX_RUN_PARAMS).index(1).multiple(true)),
+            )
+            .subcommand(SubCommand::with_name("stop").about("Stop all Fuchsia emulators"))
+            .subcommand(
+                SubCommand::with_name("enable-networking")
+                    .about("Enable networking for a running emulator"),
+            )
+            .subcommand(
+                SubCommand::with_name(RESTART)
+                    .about("Stop all Fuchsia emulators and start a new one")
+                    .arg(
+                        Arg::with_name(GRAPHICS)
+                            .short("g")
+                            .help("Start a simulator with graphics enabled"),
+                    )
+                    .arg(Arg::with_name(DISABLE_VIRTCON).long(DISABLE_VIRTCON).help(
+                        "Do not launch the virtual console service if this option is present",
+                    ))
+                    .arg(
+                        Arg::with_name(NO_NET)
+                            .long(NO_NET)
+                            .help("Don't set up networking."),
+                    )
+                    .arg(Arg::with_name(FX_RUN_PARAMS).index(1).multiple(true)),
+            )
+            .subcommand(
+                SubCommand::with_name("ssh").about("Open a shell on Fuchsia device or emulator"),
+            )
+            .subcommand(
+                SubCommand::with_name("cargo")
+                    .about(
+                        "Run a cargo command for Fuchsia. Use -- to indicate that all following \
+                         arguments should be passed to cargo.",
+                    )
+                    .arg(Arg::with_name(SUBCOMMAND).required(true))
+                    .arg(Arg::with_name("cargo_params").index(2).multiple(true)),
+            )
+            .subcommand(
+                SubCommand::with_name(RUN_ON_TARGET)
+                    .about("Act as a test runner for cargo")
+                    .arg(
+                        Arg::with_name("test_args")
+                            .long("args")
+                            .value_name("args")
+                            .help("arguments to pass to the test runner"),
+                    )
+                    .arg(
+                        Arg::with_name(TILES)
+                            .long(TILES)
+                            .help("Use tiles to run binary."),
+                    )
+                    .arg(Arg::with_name(RUN).long(RUN).help("Use run to run binary."))
+                    .arg(
+                        Arg::with_name(ERMINE)
+                            .long(ERMINE)
+                            .help("Use ermine_ctl to run binary."),
+                    )
+                    .arg(
+                        Arg::with_name("run_on_target_params")
+                            .index(1)
+                            .multiple(true),
+                    )
+                    .setting(AppSettings::Hidden),
+            )
+            .subcommand(
+                SubCommand::with_name("pkg-config")
+                    .about("Run pkg-config for the cross compilation environment")
+                    .arg(Arg::with_name("pkgconfig_param").index(1).multiple(true)),
+            )
+            .subcommand(
+                SubCommand::with_name("configure")
+                    .about("Run a configure script for the cross compilation environment")
+                    .arg(Arg::with_name("configure_param").index(1).multiple(true))
+                    .arg(
+                        Arg::with_name("no-host")
+                            .long("no-host")
+                            .help("Don't pass --host to configure"),
+                    ),
+            )
+            .subcommand(SubCommand::with_name(WRITE_CONFIG).about(
                 "Write a .cargo/config file to allow cargo to operate correctly for Fuchsia",
-            ),
-        ).get_matches();
+            ))
+            .get_matches();
 
     let verbose = matches.is_present("verbose");
     let disable_cross = matches.is_present(DISABLE_CROSS_ENV);
