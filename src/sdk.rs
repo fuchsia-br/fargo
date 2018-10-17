@@ -133,7 +133,8 @@ pub fn strip_tool_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf
 
 pub fn sysroot_path(options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     Ok(target_out_dir(&options)?
-        .join("sdks")
+        .join("sdk")
+        .join("exported")
         .join("zircon_sysroot")
         .join("arch")
         .join(options.target_cpu)
