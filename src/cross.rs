@@ -15,7 +15,7 @@ pub fn cross_root(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Err
     Ok(PathBuf::from(home_value)
         .join(".fargo")
         .join("native_deps")
-        .join(target_options.target_cpu))
+        .join(&target_options.config.fuchsia_arch))
 }
 
 pub fn pkg_config_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
@@ -61,7 +61,7 @@ pub fn run_configure(
         println!("sysroot_path: {:?}", sysroot_path);
     }
 
-    let toolchain_path = toolchain_path(target_options)?;
+    let toolchain_path = toolchain_path()?;
 
     if verbose {
         println!("toolchain_path: {:?}", toolchain_path);

@@ -17,10 +17,8 @@ use std::path::PathBuf;
 /// will change when fargo starts supporting ARM targets.
 #[derive(Debug)]
 pub struct TargetOptions<'a, 'b> {
-    pub release_os: bool,
-    pub target_cpu: &'a str,
-    pub target_cpu_linker: &'a str,
     pub device_name: Option<&'b str>,
+    pub config: &'a FuchsiaConfig,
 }
 
 impl<'a, 'b> TargetOptions<'a, 'b> {
@@ -29,19 +27,16 @@ impl<'a, 'b> TargetOptions<'a, 'b> {
     /// # Examples
     ///
     /// ```
-    /// use fargo::TargetOptions;
+    /// use fargo::{FuchsiaConfig, TargetOptions};
     ///
-    /// let target_options = TargetOptions::new(true, "x64", Some("ivy-donut-grew-stoop"));
+    /// let target_options =
+    ///     TargetOptions::new(&FuchsiaConfig::default(), Some("ivy-donut-grew-stoop"));
     /// ```
 
-    pub fn new(
-        release_os: bool, target_cpu: &'a str, device_name: Option<&'b str>,
-    ) -> TargetOptions<'a, 'b> {
+    pub fn new(config: &'a FuchsiaConfig, device_name: Option<&'b str>) -> TargetOptions<'a, 'b> {
         TargetOptions {
-            release_os: release_os,
-            target_cpu: target_cpu,
-            target_cpu_linker: target_cpu,
             device_name: device_name,
+            config: config,
         }
     }
 }
@@ -70,7 +65,17 @@ fn get_path_from_env(env_name: &str, require_dir: bool) -> Result<Option<PathBuf
     Ok(None)
 }
 
-pub fn fuchsia_dir(options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
+fn looks_like_fuchsia_dir(path: &PathBuf) -> bool {
+    for name in [".config", ".jiri_manifest"].iter() {
+        let config_path = path.join(name);
+        if !config_path.exists() {
+            return false;
+        }
+    }
+    true
+}
+
+pub fn fuchsia_dir() -> Result<PathBuf, Error> {
     let fuchsia_dir = if let Some(fuchsia_root) = get_path_from_env("FUCHSIA_ROOT", true)? {
         fuchsia_root
     } else if let Some(fuchsia_dir) = get_path_from_env("FUCHSIA_DIR", true)? {
@@ -78,7 +83,7 @@ pub fn fuchsia_dir(options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     } else {
         let mut path = env::current_dir().unwrap();
         loop {
-            if possible_target_out_dir(&path, options).is_ok() {
+            if looks_like_fuchsia_dir(&path) {
                 return Ok(path);
             }
             path = if let Some(path) = path.parent() {
@@ -87,7 +92,7 @@ pub fn fuchsia_dir(options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
                 bail!(
                     "FUCHSIA_DIR not set and current directory is not in a Fuchsia tree with a \
                      release-x64 build. You must set the environmental variable FUCHSIA_DIR to \
-                     point to a Fuchsia tree with a release-x64 build."
+                     point to a Fuchsia tree with .config and .jiri_manifest files."
                 )
             }
         }
@@ -96,29 +101,13 @@ pub fn fuchsia_dir(options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
     Ok(fuchsia_dir)
 }
 
-pub fn possible_target_out_dir(
-    fuchsia_dir: &PathBuf, options: &TargetOptions<'_, '_>,
-) -> Result<PathBuf, Error> {
-    let out_dir_name_prefix = if options.release_os {
-        "release"
-    } else {
-        "debug"
-    };
-    let out_dir_name = format!("{}-{}", out_dir_name_prefix, options.target_cpu);
-    let target_out_dir = fuchsia_dir.join("out").join(out_dir_name);
-    if !target_out_dir.exists() {
-        bail!("no target out directory found at  {:?}", target_out_dir);
-    }
-    Ok(target_out_dir)
-}
-
-pub fn target_out_dir(options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
-    let fuchsia_dir = fuchsia_dir(options)?;
-    possible_target_out_dir(&fuchsia_dir, options)
+pub fn target_out_dir(config: &FuchsiaConfig) -> Result<PathBuf, Error> {
+    let fuchsia_dir = fuchsia_dir()?;
+    Ok(fuchsia_dir.join(&config.fuchsia_build_dir))
 }
 
 pub fn cargo_out_dir(options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
-    let fuchsia_dir = fuchsia_dir(options)?;
+    let fuchsia_dir = fuchsia_dir()?;
     let target_triple = get_target_triple(options);
     Ok(fuchsia_dir
         .join("garnet")
@@ -127,23 +116,23 @@ pub fn cargo_out_dir(options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> 
         .join("debug"))
 }
 
-pub fn strip_tool_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
-    Ok(toolchain_path(target_options)?.join("bin/llvm-objcopy"))
+pub fn strip_tool_path() -> Result<PathBuf, Error> {
+    Ok(toolchain_path()?.join("bin/llvm-objcopy"))
 }
 
 pub fn sysroot_path(options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
-    Ok(target_out_dir(&options)?
+    Ok(target_out_dir(&options.config)?
         .join("sdk")
         .join("exported")
         .join("zircon_sysroot")
         .join("arch")
-        .join(options.target_cpu)
+        .join(&options.config.fuchsia_arch)
         .join("sysroot"))
 }
 
 pub fn zircon_build_path(options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
-    let fuchsia_dir = fuchsia_dir(options)?;
-    let build_name = if options.target_cpu == X64 {
+    let fuchsia_dir = fuchsia_dir()?;
+    let build_name = if options.config.fuchsia_arch == X64 {
         "build-x64"
     } else {
         "build-arm64"
@@ -156,77 +145,73 @@ pub fn zircon_build_path(options: &TargetOptions<'_, '_>) -> Result<PathBuf, Err
 }
 
 pub fn shared_libraries_path(options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
-    let shared_name = if options.target_cpu == X64 {
+    let shared_name = if options.config.fuchsia_arch == X64 {
         "x64-shared"
     } else {
         "arm64-shared"
     };
-    Ok(target_out_dir(&options)?.join(shared_name))
+    Ok(target_out_dir(&options.config)?.join(shared_name))
 }
 
-fn buildtools_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
+fn buildtools_path() -> Result<PathBuf, Error> {
     let platform_name = if is_mac() { "mac-x64" } else { "linux-x64" };
-    Ok(fuchsia_dir(target_options)?
-        .join("buildtools")
-        .join(platform_name))
+    Ok(fuchsia_dir()?.join("buildtools").join(platform_name))
 }
 
-pub fn cargo_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
+pub fn cargo_path() -> Result<PathBuf, Error> {
     if let Some(cargo_path) = get_path_from_env("FARGO_CARGO", false)? {
         Ok(cargo_path)
     } else {
-        Ok(buildtools_path(target_options)?.join("rust/bin/cargo"))
+        Ok(buildtools_path()?.join("rust/bin/cargo"))
     }
 }
 
-pub fn rustc_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
+pub fn rustc_path() -> Result<PathBuf, Error> {
     if let Some(rustc_path) = get_path_from_env("FARGO_RUSTC", false)? {
         Ok(rustc_path)
     } else {
-        Ok(buildtools_path(target_options)?.join("rust/bin/rustc"))
+        Ok(buildtools_path()?.join("rust/bin/rustc"))
     }
 }
 
-pub fn rustdoc_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
+pub fn rustdoc_path() -> Result<PathBuf, Error> {
     if let Some(rustdoc_path) = get_path_from_env("FARGO_RUSTDOC", false)? {
         Ok(rustdoc_path)
     } else {
-        Ok(buildtools_path(target_options)?.join("rust/bin/rustdoc"))
+        Ok(buildtools_path()?.join("rust/bin/rustdoc"))
     }
 }
 
-pub fn toolchain_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
-    Ok(buildtools_path(target_options)?.join("clang"))
+pub fn toolchain_path() -> Result<PathBuf, Error> {
+    Ok(buildtools_path()?.join("clang"))
 }
 
-pub fn clang_linker_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
-    Ok(toolchain_path(target_options)?.join("bin").join("clang"))
+pub fn clang_linker_path() -> Result<PathBuf, Error> {
+    Ok(toolchain_path()?.join("bin").join("clang"))
 }
 
-pub fn clang_c_compiler_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
-    Ok(toolchain_path(target_options)?.join("bin").join("clang"))
+pub fn clang_c_compiler_path() -> Result<PathBuf, Error> {
+    Ok(toolchain_path()?.join("bin").join("clang"))
 }
 
-pub fn clang_cpp_compiler_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
-    Ok(toolchain_path(target_options)?.join("bin").join("clang++"))
+pub fn clang_cpp_compiler_path() -> Result<PathBuf, Error> {
+    Ok(toolchain_path()?.join("bin").join("clang++"))
 }
 
-pub fn clang_archiver_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
-    Ok(toolchain_path(target_options)?.join("bin").join("llvm-ar"))
+pub fn clang_archiver_path() -> Result<PathBuf, Error> {
+    Ok(toolchain_path()?.join("bin").join("llvm-ar"))
 }
 
-pub fn clang_ranlib_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
-    Ok(toolchain_path(target_options)?
-        .join("bin")
-        .join("llvm-ranlib"))
+pub fn clang_ranlib_path() -> Result<PathBuf, Error> {
+    Ok(toolchain_path()?.join("bin").join("llvm-ranlib"))
 }
 
-pub fn fx_path(target_options: &TargetOptions<'_, '_>) -> Result<PathBuf, Error> {
-    let fuchsia_dir = fuchsia_dir(target_options)?;
+pub fn fx_path() -> Result<PathBuf, Error> {
+    let fuchsia_dir = fuchsia_dir()?;
     Ok(fuchsia_dir.join("scripts/fx"))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct FuchsiaConfig {
     pub fuchsia_build_dir: String,
     pub fuchsia_variant: String,
@@ -235,14 +220,14 @@ pub struct FuchsiaConfig {
 }
 
 impl FuchsiaConfig {
-    pub fn new(target_options: &TargetOptions<'_, '_>) -> Result<FuchsiaConfig, Error> {
+    pub fn new() -> Result<FuchsiaConfig, Error> {
         let mut config = FuchsiaConfig {
             fuchsia_build_dir: String::from(""),
             fuchsia_variant: String::from(""),
             fuchsia_arch: String::from(""),
             zircon_project: String::from(""),
         };
-        let fuchsia_dir = fuchsia_dir(target_options)?;
+        let fuchsia_dir = fuchsia_dir()?;
         let config_path = fuchsia_dir.join(".config");
         let mut config_file = File::open(&config_path)?;
         let mut config_file_contents_str = String::new();
@@ -250,18 +235,19 @@ impl FuchsiaConfig {
         for one_line in config_file_contents_str.lines() {
             let parts: Vec<&str> = one_line.split("=").collect();
             if parts.len() == 2 {
+                const QUOTE: char = '\'';
                 match parts[0] {
                     "FUCHSIA_BUILD_DIR" => {
-                        config.fuchsia_build_dir = String::from(parts[1].trim_matches('"'))
+                        config.fuchsia_build_dir = String::from(parts[1].trim_matches(QUOTE))
                     }
                     "FUCHSIA_VARIANT" => {
-                        config.fuchsia_variant = String::from(parts[1].trim_matches('"'))
+                        config.fuchsia_variant = String::from(parts[1].trim_matches(QUOTE))
                     }
                     "FUCHSIA_ARCH" => {
-                        config.fuchsia_arch = String::from(parts[1].trim_matches('"'))
+                        config.fuchsia_arch = String::from(parts[1].trim_matches(QUOTE))
                     }
                     "ZIRCON_PROJECT" => {
-                        config.zircon_project = String::from(parts[1].trim_matches('"'))
+                        config.zircon_project = String::from(parts[1].trim_matches(QUOTE))
                     }
                     _ => (),
                 }

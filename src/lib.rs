@@ -13,15 +13,14 @@ mod device;
 mod sdk;
 mod utils;
 
-pub use crate::sdk::TargetOptions;
+pub use crate::sdk::{FuchsiaConfig, TargetOptions};
 
 use crate::cross::{pkg_config_path, run_configure, run_pkg_config};
 use crate::device::{enable_networking, netaddr, netls, scp_to_device, ssh, start_emulator,
                     stop_emulator, StartEmulatorOptions};
 use crate::sdk::{cargo_out_dir, cargo_path, clang_archiver_path, clang_c_compiler_path,
                  clang_cpp_compiler_path, clang_linker_path, clang_ranlib_path, rustc_path,
-                 rustdoc_path, shared_libraries_path, sysroot_path, zircon_build_path,
-                 FuchsiaConfig};
+                 rustdoc_path, shared_libraries_path, sysroot_path, zircon_build_path};
 use crate::utils::{is_mac, strip_binary};
 
 use clap::{App, AppSettings, Arg, SubCommand};
@@ -33,7 +32,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn copy_to_target(
-    source_path: &PathBuf, verbose: bool, target_options: &TargetOptions<'_, '_>,
+    source_path: &PathBuf, verbose: bool, config: &FuchsiaConfig,
+    target_options: &TargetOptions<'_, '_>,
 ) -> Result<String, Error> {
     let netaddr = netaddr(verbose, target_options)?;
     if verbose {
@@ -48,23 +48,17 @@ fn copy_to_target(
         source_path.to_string_lossy(),
         destination_path
     );
-    scp_to_device(
-        verbose,
-        target_options,
-        &netaddr,
-        &source_path,
-        &destination_path,
-    )?;
+    scp_to_device(verbose, config, &netaddr, &source_path, &destination_path)?;
     Ok(destination_path)
 }
 
 fn run_program_on_target(
-    filename: &str, verbose: bool, target_options: &TargetOptions<'_, '_>, run_mode: RunMode,
-    params: &[&str], test_args: Option<&str>,
+    filename: &str, verbose: bool, config: &FuchsiaConfig, target_options: &TargetOptions<'_, '_>,
+    run_mode: RunMode, params: &[&str], test_args: Option<&str>,
 ) -> Result<(), Error> {
     let source_path = PathBuf::from(&filename);
-    let stripped_source_path = strip_binary(&source_path, target_options)?;
-    let destination_path = copy_to_target(&stripped_source_path, verbose, target_options)?;
+    let stripped_source_path = strip_binary(&source_path)?;
+    let destination_path = copy_to_target(&stripped_source_path, verbose, config, target_options)?;
     let mut command_string = (match run_mode {
         RunMode::Tiles => "tiles_ctl add ",
         RunMode::Ermine => "ermine_ctl add ",
@@ -87,7 +81,7 @@ fn run_program_on_target(
         println!("running {}", command_string);
     }
 
-    ssh(verbose, target_options, &command_string)?;
+    ssh(verbose, config, target_options, &command_string)?;
     Ok(())
 }
 
@@ -231,7 +225,8 @@ fn build_doc(
 }
 
 fn load_driver(
-    run_cargo_options: &RunCargoOptions, target_options: &TargetOptions<'_, '_>,
+    run_cargo_options: &RunCargoOptions, config: &FuchsiaConfig,
+    target_options: &TargetOptions<'_, '_>,
 ) -> Result<(), Error> {
     let args = vec![];
     run_cargo(
@@ -249,12 +244,18 @@ fn load_driver(
         .to_str()
         .ok_or(err_msg("Invalid current directory"))?;
     let filename = cargo_out_dir(target_options)?.join(format!("lib{}.so", package));
-    let destination_path = copy_to_target(&filename, run_cargo_options.verbose, target_options)?;
+    let destination_path =
+        copy_to_target(&filename, run_cargo_options.verbose, config, target_options)?;
     let command_string = format!("dm add-driver:{}", destination_path);
     if run_cargo_options.verbose {
         println!("running {}", command_string);
     }
-    ssh(run_cargo_options.verbose, target_options, &command_string)?;
+    ssh(
+        run_cargo_options.verbose,
+        config,
+        target_options,
+        &command_string,
+    )?;
     Ok(())
 }
 
@@ -340,7 +341,7 @@ impl RunCargoOptions {
 }
 
 fn get_triple_cpu(target_options: &TargetOptions<'_, '_>) -> String {
-    if (target_options.target_cpu) == X64 {
+    if (target_options.config.fuchsia_arch) == X64 {
         "x86_64"
     } else {
         "aarch64"
@@ -402,10 +403,6 @@ fn make_fargo_command(
         runner_args.push("-v");
     }
 
-    if !target_options.release_os {
-        runner_args.push("--debug-os");
-    }
-
     if let Some(device_name) = target_options.device_name {
         runner_args.push("--device-name");
         runner_args.push(device_name);
@@ -443,9 +440,10 @@ fn convert_manifest_path(possible_path: &Option<&str>) -> Option<PathBuf> {
 /// # Examples
 ///
 /// ```
-/// use fargo::{run_cargo, RunCargoOptions, RunMode, TargetOptions};
+/// use fargo::{run_cargo, FuchsiaConfig, RunCargoOptions, RunMode, TargetOptions};
 ///
-/// let target_options = TargetOptions::new(true, "x64", None);
+/// let config = FuchsiaConfig::default();
+/// let target_options = TargetOptions::new(&config, None);
 /// run_cargo(
 ///     &RunCargoOptions {
 ///         verbose: false,
@@ -481,7 +479,7 @@ pub fn run_cargo(
     if options.verbose {
         println!(
             "target_options.target_cpu = {:?}",
-            target_options.target_cpu
+            target_options.config.fuchsia_arch
         );
         println!("triple_cpu = {:?}", triple_cpu);
         println!("target_triple = {:?}", target_triple);
@@ -499,7 +497,7 @@ pub fn run_cargo(
     }
 
     let pkg_path = pkg_config_path(target_options)?;
-    let mut cmd = Command::new(cargo_path(target_options)?);
+    let mut cmd = Command::new(cargo_path()?);
     let sysroot_as_path = sysroot_path(target_options)?;
     let sysroot_as_str = sysroot_as_path.to_str().unwrap();
 
@@ -516,14 +514,8 @@ pub fn run_cargo(
         println!("runner_env_name: {:?}", runner_env_name);
         println!("rustflags_env_name: {:?}", rustflags_env_name);
         println!("linker_env_name: {:?}", linker_env_name);
-        println!(
-            "rustc_path: {:?}",
-            rustc_path(target_options)?.to_str().unwrap()
-        );
-        println!(
-            "cargo_path: {:?}",
-            cargo_path(target_options)?.to_str().unwrap()
-        );
+        println!("rustc_path: {:?}", rustc_path()?.to_str().unwrap());
+        println!("cargo_path: {:?}", cargo_path()?.to_str().unwrap());
     }
 
     cmd.env(runner_env_name, fargo_command)
@@ -531,12 +523,9 @@ pub fn run_cargo(
             rustflags_env_name,
             get_rustflags(target_options, &sysroot_as_path)?,
         )
-        .env(
-            linker_env_name,
-            clang_linker_path(target_options)?.to_str().unwrap(),
-        )
-        .env("RUSTC", rustc_path(target_options)?.to_str().unwrap())
-        .env("RUSTDOC", rustdoc_path(target_options)?.to_str().unwrap())
+        .env(linker_env_name, clang_linker_path()?.to_str().unwrap())
+        .env("RUSTC", rustc_path()?.to_str().unwrap())
+        .env("RUSTDOC", rustdoc_path()?.to_str().unwrap())
         .env("RUSTDOCFLAGS", "--cap-lints allow -Z unstable-options")
         .env(
             "FUCHSIA_SHARED_ROOT",
@@ -557,27 +546,15 @@ pub fn run_cargo(
         let cxx_env_name = format!("CXX_{}", target_triple_uc);
         let cflags_env_name = format!("CFLAGS_{}", target_triple_uc);
         let ar_env_name = format!("AR_{}", target_triple_uc);
-        cmd.env(
-            cc_env_name,
-            clang_c_compiler_path(target_options)?.to_str().unwrap(),
-        )
-        .env(
-            cxx_env_name,
-            clang_cpp_compiler_path(target_options)?.to_str().unwrap(),
-        )
-        .env(cflags_env_name, format!("--sysroot={}", sysroot_as_str))
-        .env(
-            ar_env_name,
-            clang_archiver_path(target_options)?.to_str().unwrap(),
-        )
-        .env(
-            "RANLIB",
-            clang_ranlib_path(target_options)?.to_str().unwrap(),
-        )
-        .env("PKG_CONFIG_ALL_STATIC", "1")
-        .env("PKG_CONFIG_ALLOW_CROSS", "1")
-        .env("PKG_CONFIG_PATH", "")
-        .env("PKG_CONFIG_LIBDIR", pkg_path);
+        cmd.env(cc_env_name, clang_c_compiler_path()?.to_str().unwrap())
+            .env(cxx_env_name, clang_cpp_compiler_path()?.to_str().unwrap())
+            .env(cflags_env_name, format!("--sysroot={}", sysroot_as_str))
+            .env(ar_env_name, clang_archiver_path()?.to_str().unwrap())
+            .env("RANLIB", clang_ranlib_path()?.to_str().unwrap())
+            .env("PKG_CONFIG_ALL_STATIC", "1")
+            .env("PKG_CONFIG_ALLOW_CROSS", "1")
+            .env("PKG_CONFIG_PATH", "")
+            .env("PKG_CONFIG_LIBDIR", pkg_path);
     }
 
     if options.verbose {
@@ -619,7 +596,7 @@ fn write_config(
     writeln!(
         config,
         "linker = \"{}\"",
-        clang_linker_path(target_options)?.to_str().unwrap()
+        clang_linker_path()?.to_str().unwrap()
     )?;
     writeln!(
         config,
@@ -628,15 +605,11 @@ fn write_config(
     )?;
     writeln!(config, "")?;
     writeln!(config, "[build]")?;
-    writeln!(
-        config,
-        "rustc = \"{}\"",
-        rustc_path(target_options)?.to_str().unwrap()
-    )?;
+    writeln!(config, "rustc = \"{}\"", rustc_path()?.to_str().unwrap())?;
     writeln!(
         config,
         "rustdoc = \"{}\"",
-        rustdoc_path(target_options)?.to_str().unwrap()
+        rustdoc_path()?.to_str().unwrap()
     )?;
     writeln!(config, "target = \"{}\"", get_target_triple(target_options))?;
     Ok(())
@@ -655,9 +628,7 @@ static DOC: &str = "doc";
 static DOC_OPEN: &str = "open";
 static DOC_NO_DEPS: &str = "no-deps";
 
-static TARGET_CPU: &str = "target-cpu";
 static X64: &str = "x64";
-static ARM64: &str = "arm64";
 
 static SUBCOMMAND: &str = "subcommand";
 
@@ -692,23 +663,9 @@ pub fn run() -> Result<(), Error> {
                     .help("Print verbose output while performing commands"),
             )
             .arg(
-                Arg::with_name("debug-os")
-                    .long("debug-os")
-                    .help("Use debug user.bootfs and ssh keys"),
-            )
-            .arg(
                 Arg::with_name(DISABLE_CROSS_ENV)
                     .long(DISABLE_CROSS_ENV)
                     .help("Disable the setting of CC, AR and such environmental variables."),
-            )
-            .arg(
-                Arg::with_name(TARGET_CPU)
-                    .long(TARGET_CPU)
-                    .short("T")
-                    .value_name(TARGET_CPU)
-                    .default_value(X64)
-                    .possible_values(&[X64, ARM64])
-                    .help("Architecture of target device"),
             )
             .arg(
                 Arg::with_name("device-name")
@@ -938,12 +895,13 @@ pub fn run() -> Result<(), Error> {
 
     let verbose = matches.is_present("verbose");
     let disable_cross = matches.is_present(DISABLE_CROSS_ENV);
-    let release = !matches.is_present("debug-os");
-    let target_options = TargetOptions::new(
-        release,
-        matches.value_of(TARGET_CPU).unwrap(),
-        matches.value_of("device-name"),
-    );
+
+    let fuchsia_config = FuchsiaConfig::new()?;
+    if verbose {
+        println!("fuchsia_config = {:#?}", fuchsia_config);
+    }
+
+    let target_options = TargetOptions::new(&fuchsia_config, matches.value_of("device-name"));
 
     let run_cargo_options = RunCargoOptions {
         verbose,
@@ -955,11 +913,6 @@ pub fn run() -> Result<(), Error> {
 
     if verbose {
         println!("target_options = {:#?}", target_options);
-    }
-
-    let fuchsia_config = FuchsiaConfig::new(&target_options)?;
-    if verbose {
-        println!("fuchsia_config = {:#?}", fuchsia_config);
     }
 
     if let Some(autotest_matches) = matches.subcommand_matches("autotest") {
@@ -1062,6 +1015,7 @@ pub fn run() -> Result<(), Error> {
     if let Some(load_driver_matches) = matches.subcommand_matches("load-driver") {
         return load_driver(
             &run_cargo_options.release(load_driver_matches.is_present(RELEASE)),
+            &fuchsia_config,
             &target_options,
         );
     }
@@ -1092,17 +1046,10 @@ pub fn run() -> Result<(), Error> {
     }
 
     if matches.subcommand_matches("list-devices").is_some() {
-        return netls(verbose, &target_options);
+        return netls(verbose);
     }
 
     if let Some(start_matches) = matches.subcommand_matches(START) {
-        if fuchsia_config.is_release() != target_options.release_os {
-            bail!(
-                "Variant '{}' from .config would override the fargo command line flag.",
-                fuchsia_config.fuchsia_variant
-            );
-        }
-
         let fx_run_params = start_matches
             .values_of(FX_RUN_PARAMS)
             .map(|x| x.collect())
@@ -1116,7 +1063,6 @@ pub fn run() -> Result<(), Error> {
                 disable_virtcon: start_matches.is_present(DISABLE_VIRTCON),
             },
             &fx_run_params,
-            &target_options,
         );
     }
 
@@ -1144,12 +1090,11 @@ pub fn run() -> Result<(), Error> {
                 disable_virtcon: restart_matches.is_present(DISABLE_VIRTCON),
             },
             &fx_run_params,
-            &target_options,
         );
     }
 
     if matches.subcommand_matches("ssh").is_some() {
-        return ssh(verbose, &target_options, "");
+        return ssh(verbose, &fuchsia_config, &target_options, "");
     }
 
     if let Some(cargo_matches) = matches.subcommand_matches("cargo") {
@@ -1186,7 +1131,15 @@ pub fn run() -> Result<(), Error> {
             run_on_target_matches.is_present(RUN),
             run_on_target_matches.is_present(ERMINE),
         );
-        return run_program_on_target(program, verbose, &target_options, run_mode, args, test_args);
+        return run_program_on_target(
+            program,
+            verbose,
+            &fuchsia_config,
+            &target_options,
+            run_mode,
+            args,
+            test_args,
+        );
     }
 
     if let Some(pkg_matches) = matches.subcommand_matches("pkg-config") {

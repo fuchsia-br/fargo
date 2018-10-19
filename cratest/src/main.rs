@@ -65,7 +65,8 @@ fn main() {
                   (@arg restart: --restart "Stop all Fuchsia emulators and start a new one")
                   (@arg keep: --keep "Keeps the temp dir after exiting")
                   (@arg verbose: -v --verbose "Print verbose output while performing commands")
-                 ).get_matches();
+                 )
+    .get_matches();
 
     let num = value_t!(matches, "num", usize).unwrap_or(DEFAULT_NUM);
     let verbose = matches.is_present("verbose");
@@ -154,7 +155,8 @@ fn main() {
                     TestResult::Failure
                 },
             }
-        }).collect();
+        })
+        .collect();
 
     let (succ, fail, excl) = results.into_iter().fold(
         (Vec::new(), Vec::new(), Vec::new()),

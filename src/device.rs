@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use crate::sdk::{fuchsia_dir, fx_path, target_out_dir, TargetOptions};
+use crate::sdk::{fuchsia_dir, fx_path, target_out_dir, FuchsiaConfig, TargetOptions};
 use crate::utils::is_mac;
 use failure::{bail, err_msg, Error, ResultExt};
 use std::env;
@@ -11,7 +11,7 @@ use std::process::{Command, Stdio};
 use std::{str, thread, time};
 
 pub fn netaddr(verbose: bool, target_options: &TargetOptions<'_, '_>) -> Result<String, Error> {
-    let fuchsia_dir = fuchsia_dir(target_options)?;
+    let fuchsia_dir = fuchsia_dir()?;
     let netaddr_binary = fuchsia_dir.join("out/build-zircon/tools/netaddr");
     let mut args = vec!["--fuchsia"];
     if let Some(device_name) = target_options.device_name {
@@ -42,8 +42,8 @@ pub fn netaddr(verbose: bool, target_options: &TargetOptions<'_, '_>) -> Result<
     Ok(result)
 }
 
-pub fn netls(verbose: bool, target_options: &TargetOptions<'_, '_>) -> Result<(), Error> {
-    let fuchsia_dir = fuchsia_dir(target_options)?;
+pub fn netls(verbose: bool) -> Result<(), Error> {
+    let fuchsia_dir = fuchsia_dir()?;
     let netls_binary = fuchsia_dir.join("out/build-zircon/tools/netls");
     let mut netls_command = Command::new(netls_binary);
     netls_command.arg("--nowait").arg("--timeout=500");
@@ -67,11 +67,11 @@ static SSH_OPTIONS: &'static [&str] = &[
 ];
 
 pub fn scp_to_device(
-    verbose: bool, target_options: &TargetOptions<'_, '_>, netaddr: &str, source_path: &PathBuf,
+    verbose: bool, config: &FuchsiaConfig, netaddr: &str, source_path: &PathBuf,
     destination_path: &str,
 ) -> Result<(), Error> {
     let destination_with_address = format!("[{}]:{}", netaddr, destination_path);
-    let ssh_config = target_out_dir(target_options)?.join("ssh-keys/ssh_config");
+    let ssh_config = target_out_dir(config)?.join("ssh-keys/ssh_config");
     if !ssh_config.exists() {
         bail!("ssh config not found at {:?}", ssh_config);
     }
@@ -105,10 +105,10 @@ pub fn scp_to_device(
 }
 
 pub fn ssh(
-    verbose: bool, target_options: &TargetOptions<'_, '_>, command: &str,
+    verbose: bool, config: &FuchsiaConfig, target_options: &TargetOptions<'_, '_>, command: &str,
 ) -> Result<(), Error> {
     let netaddr = netaddr(verbose, target_options)?;
-    let ssh_config = target_out_dir(target_options)?.join("ssh-keys/ssh_config");
+    let ssh_config = target_out_dir(config)?.join("ssh-keys/ssh_config");
     if !ssh_config.exists() {
         bail!("ssh config not found at {:?}", ssh_config);
     }
@@ -236,11 +236,9 @@ pub struct StartEmulatorOptions {
     pub disable_virtcon: bool,
 }
 
-pub fn start_emulator(
-    options: &StartEmulatorOptions, params: &[&str], target_options: &TargetOptions<'_, '_>,
-) -> Result<(), Error> {
-    let fuchsia_dir = fuchsia_dir(target_options)?;
-    let fx_script = fx_path(target_options)?;
+pub fn start_emulator(options: &StartEmulatorOptions, params: &[&str]) -> Result<(), Error> {
+    let fuchsia_dir = fuchsia_dir()?;
+    let fx_script = fx_path()?;
     if !fx_script.exists() {
         bail!("fx script not found at {:?}", fx_script);
     }

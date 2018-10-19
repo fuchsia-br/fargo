@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use crate::sdk::{strip_tool_path, TargetOptions};
+use crate::sdk::strip_tool_path;
 use failure::{bail, Error, ResultExt};
 use std::path::PathBuf;
 use std::process::Command;
@@ -19,13 +19,11 @@ pub fn is_mac() -> bool {
     uname().unwrap().sysname == "Darwin"
 }
 
-pub fn strip_binary(
-    binary: &PathBuf, target_options: &TargetOptions<'_, '_>,
-) -> Result<PathBuf, Error> {
+pub fn strip_binary(binary: &PathBuf) -> Result<PathBuf, Error> {
     let file_name = binary.file_name().unwrap();
     let new_file_name = file_name.to_string_lossy().into_owned() + "_stripped";
     let target_path = binary.parent().unwrap().join(new_file_name);
-    let strip_result = Command::new(strip_tool_path(target_options)?)
+    let strip_result = Command::new(strip_tool_path()?)
         .arg("-strip-all")
         .arg(binary)
         .arg(&target_path)
